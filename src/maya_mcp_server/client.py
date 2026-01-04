@@ -8,7 +8,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from maya_mcp_server.bootstrap import (
-    BOOTSTRAP_CODE,
     CHECK_BOOTSTRAP,
     CREATE_MODULE_TEMPLATE,
     EXECUTE_TEMPLATE,
@@ -16,6 +15,7 @@ from maya_mcp_server.bootstrap import (
     GET_SESSION_INFO,
     INSTALL_STREAM_CAPTURE,
     UNINSTALL_STREAM_CAPTURE,
+    get_bootstrap_code,
 )
 from maya_mcp_server.types import ExecutionResult, PortType, ResultType, SessionInfo
 
@@ -214,7 +214,8 @@ class MayaClient:
         # Execute bootstrap code using exec() with globals() to persist definitions
         # Maya command port runs each command in isolated scope, so we must use
         # exec(..., globals()) to make the code affect the global namespace
-        bootstrap_cmd = f"exec({BOOTSTRAP_CODE!r}, globals())"
+        bootstrap_code = get_bootstrap_code()
+        bootstrap_cmd = f"exec({bootstrap_code!r}, globals())"
         await self._send_receive(bootstrap_cmd)
         self._bootstrapped = True
         logger.info("Maya session bootstrapped")
