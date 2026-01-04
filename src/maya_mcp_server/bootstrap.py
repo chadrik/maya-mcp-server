@@ -75,6 +75,12 @@ CREATE_MODULE_TEMPLATE = f"{_MCP_HELPER}.create_module({{name!r}}, {{code!r}}, {
 INSTALL_STREAM_CAPTURE = f"{_MCP_HELPER}.install_stream_capture()"
 UNINSTALL_STREAM_CAPTURE = f"{_MCP_HELPER}.uninstall_stream_capture()"
 GET_BUFFERED_OUTPUT = f"{_MCP_HELPER}.get_buffered_output()"
+START_COMMAND_PORT = f"{_MCP_HELPER}.start_command_port({{port!r}})"
+
+# Qt server command templates
+START_QT_SERVER = f"{_MCP_HELPER}.start_qt_server()"
+STOP_QT_SERVER = f"{_MCP_HELPER}.stop_qt_server()"
+GET_QT_SERVER_PORT = f"{_MCP_HELPER}.get_qt_server_port()"
 
 # Check if bootstrap has been done
 CHECK_BOOTSTRAP = "'maya_mcp' in __import__('sys').modules"

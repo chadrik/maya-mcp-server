@@ -3,6 +3,12 @@
 from enum import Enum
 from typing import Any, TypedDict
 
+# Port ranges
+# Communication ports: per-client dedicated ports created during bootstrap
+# These are filtered out when scanning for configuration ports
+COMMUNICATION_PORT_MIN = 50000
+COMMUNICATION_PORT_MAX = 60000
+
 
 class ResultType(str, Enum):
     """How to interpret execution results."""
@@ -51,3 +57,11 @@ class SessionInfo(TypedDict, total=False):
     maya_version: str
     scene_name: str
     scene_path: str
+
+
+class MayaListeningPort(TypedDict):
+    """Information about a listening port for a Maya process."""
+
+    port: int  # Port number
+    address: str  # IP address (usually 127.0.0.1)
+    process_id: int  # PID of the Maya process

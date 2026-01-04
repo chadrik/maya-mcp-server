@@ -24,7 +24,18 @@ pip install maya-mcp-server
 
 ### Claude Code Configuration
 
-Add to your Claude Code MCP configuration:
+Add to your Claude Code MCP configuration, run:
+
+```commandline
+claude mcp add --transport stdio maya -- uvx maya-mcp-server
+```
+
+The default scope is "local", which adds it to your `~/.claude.json` keyed to a particular project directory.  Setting `--scope=user` adds to `~/.claude.json` across all projects, and `--scope=project` to add the configuration into a `.mcp.json` in the current project directory, so that it can be commited to your repo.
+
+For local development use: 
+```commandline
+claude mcp add --transport stdio maya -- uv run --directory /path/to/maya-mcp-server/ maya-mcp-server
+```
 
 ```json
 {
@@ -35,6 +46,24 @@ Add to your Claude Code MCP configuration:
     }
   }
 }
+```
+
+```json
+      "mcpServers": {
+        "maya": {
+          "type": "stdio",
+          "command": "uv",
+          "args": [
+            "run",
+            "--directory",
+            "/Users/chad/dev/maya-mcp-server",
+            "maya-mcp-server"
+          ],
+          "env": {
+            "PYTHONUNBUFFERED": "1"
+          }
+        }
+      },
 ```
 
 ### Maya Setup
@@ -77,7 +106,7 @@ Disadvantages:
 
 ### [Jupyter MCP Server](https://jupyter-mcp-server.datalayer.tech/)
 
-I'm including this because it was a solid reference for how to create an MCP server that works with many clients to execute arbitrary code.
+This provided a solid reference for how to create an MCP server that works with multiple remote sessions (in this case, notebooks) to execute arbitrary code.
 
 ## Development
 
@@ -95,3 +124,13 @@ uv run maya-mcp-server
 ## License
 
 MIT
+
+## TODO
+
+- [ ] Start a new command port for each client, so that multiple clients can connect.
+- [ ] list_sessions should have one session per maya instance, not per instance x port. we need to track configuration ports separately from communication ports.  For maya-command-ports, there's one commandport per active MCP client.  For qt-command-servers, there's one port for all acive MCP clients. 
+- [ ] Use `sys.displayhook`
+- [ ] Raise exceptions instead of returning dict with error key
+- [ ] Make scene status into a resource
+- [ ] Replace TypedDict with dataclasses for tools and resources
+- [ ] Yield output as it's printed?

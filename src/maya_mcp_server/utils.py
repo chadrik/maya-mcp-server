@@ -1,57 +1,68 @@
 import logging
 import socket
+from collections.abc import Iterator
 
 import psutil
+
+from maya_mcp_server.types import MayaListeningPort
 
 
 logger = logging.getLogger(__name__)
 
 
-def get_maya_process() -> psutil.Process | None:
-    """Find Maya process."""
+def get_maya_process() -> Iterator[psutil.Process]:
+    """
+    Find all Maya processes.
+
+    Yields:
+        Maya Process objects
+    """
     for proc in psutil.process_iter(["name", "pid"]):
         try:
             name = proc.info["name"]
             # Maya process names vary by platform
             if name in ["Maya", "maya", "maya.exe", "Maya.exe"]:
-                return proc
+                yield proc
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
-    return None
 
 
-def get_maya_listening_ports() -> list[dict]:
-    """Get all ports Maya is listening on."""
-    maya_proc = get_maya_process()
+def get_maya_listening_ports() -> Iterator[MayaListeningPort]:
+    """
+    Get all ports that Maya processes are listening on.
 
-    if not maya_proc:
+    Yields:
+        MayaListeningPort dictionaries with port, address, and process_id
+    """
+    found_any_maya = False
+
+    for maya_proc in get_maya_process():
+        found_any_maya = True
+        logger.debug(f"Found Maya process: PID {maya_proc.pid}")
+
+        try:
+            # Get all network connections for Maya process
+            connections = maya_proc.net_connections(kind="inet")
+
+            for conn in connections:
+                # Only get listening TCP connections on IPv4 (command ports are always IPv4)
+                if (
+                    conn.status == "LISTEN"
+                    and conn.type == socket.SOCK_STREAM
+                    and conn.family == socket.AF_INET
+                ):
+                    yield MayaListeningPort(
+                        port=conn.laddr.port,
+                        address=conn.laddr.ip,
+                        process_id=maya_proc.pid,
+                    )
+
+        except psutil.AccessDenied:
+            logger.warning(
+                f"Access denied getting Maya connections for PID {maya_proc.pid} - "
+                "try running as administrator/sudo"
+            )
+            continue
+
+    if not found_any_maya:
         logger.debug("Maya is not running")
-        return []
-
-    logger.debug(f"Found Maya process: PID {maya_proc.pid}")
-
-    listening_ports = []
-
-    try:
-        # Get all network connections for Maya process
-        connections = maya_proc.net_connections(kind="inet")
-
-        for conn in connections:
-            # Only get listening TCP connections on IPv4 (command ports are always IPv4)
-            if (
-                conn.status == "LISTEN"
-                and conn.type == socket.SOCK_STREAM
-                and conn.family == socket.AF_INET
-            ):
-                listening_ports.append(
-                    {
-                        "port": conn.laddr.port,
-                        "address": conn.laddr.ip,
-                    }
-                )
-
-    except psutil.AccessDenied:
-        logger.warning("Access denied getting Maya connections - try running as administrator/sudo")
-        return []
-
-    return listening_ports

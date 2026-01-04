@@ -6,7 +6,12 @@ import asyncio
 import logging
 
 from maya_mcp_server.client import MayaClient, MayaConnectionError
-from maya_mcp_server.types import PortType, SessionInfo
+from maya_mcp_server.types import (
+    PortType,
+    SessionInfo,
+    COMMUNICATION_PORT_MIN,
+    COMMUNICATION_PORT_MAX,
+)
 from maya_mcp_server.utils import get_maya_listening_ports
 
 
@@ -27,7 +32,8 @@ class SessionManager:
             scan_interval: Seconds between background scans
         """
         self.scan_interval = scan_interval
-        self._sessions: dict[str, MayaClient] = {}  # key: "host:port"
+        self._sessions: dict[str, MayaClient] = {}  # key: "host:port" (communication port)
+        self._config_to_session: dict[str, str] = {}  # map config port -> session key
         self._active_session: MayaClient | None = None
         self._scan_task: asyncio.Task[None] | None = None
         self._running = False
@@ -48,7 +54,8 @@ class SessionManager:
         await self._scan_for_sessions()
 
         # Start background scanning task
-        self._scan_task = asyncio.create_task(self._background_scan())
+        # FIXME: restore this
+        # self._scan_task = asyncio.create_task(self._background_scan())
 
     async def stop(self) -> None:
         """Stop scanning and disconnect all sessions."""
@@ -70,6 +77,7 @@ class SessionManager:
                 logger.debug(f"Error disconnecting client: {e}")
 
         self._sessions.clear()
+        self._config_to_session.clear()
         self._active_session = None
         logger.info("Session manager stopped")
 
@@ -86,24 +94,32 @@ class SessionManager:
                 logger.error(f"Error in background scan: {e}")
 
     async def _scan_for_sessions(self) -> None:
-        """Scan for Maya sessions using actual listening ports."""
-        listening_ports = get_maya_listening_ports()
-        logger.debug(f"Found Maya listening on {len(listening_ports)} port(s)")
+        """Scan for Maya sessions using actual listening ports.
 
-        for port_info in listening_ports:
+        Only scans configuration ports (outside the communication port range).
+        Communication ports are per-client dedicated ports created during bootstrap.
+        """
+        for port_info in get_maya_listening_ports():
             host = port_info["address"]
             port = port_info["port"]
-            key = self._session_key(host, port)
+            config_key = self._session_key(host, port)
 
-            # Skip if we already have this session
-            if key in self._sessions:
+            # Skip communication ports (dedicated per-client ports)
+            if COMMUNICATION_PORT_MIN <= port <= COMMUNICATION_PORT_MAX:
                 continue
 
-            # Try to connect
+            # Skip if we've already used this configuration port to create a session
+            if config_key in self._config_to_session:
+                continue
+
+            # Try to connect to this configuration port
             client = await self._probe_port(host, port)
             if client:
-                self._sessions[key] = client
-                logger.info(f"Discovered Maya session at {key}")
+                # Store session by its communication port key
+                self._sessions[client.key] = client
+                # Track which config port created this session
+                self._config_to_session[config_key] = client.key
+                logger.info(f"Discovered Maya session at {client.key} (PID {port_info['process_id']})")
 
     async def _probe_port(self, host: str, port: int) -> MayaClient | None:
         """
@@ -121,42 +137,9 @@ class SessionManager:
 
         try:
             await client.connect()
-
-            # Detect port type
-            port_type = await client.detect_port_type()
-
-            if port_type == PortType.PYTHON:
-                # Bootstrap the session
-                await client.bootstrap()
-                return client
-
-            elif port_type == PortType.MEL:
-                # Try to open a Python port via MEL
-                python_port = port + 1000  # Convention: Python port = MEL port + 1000
-                mel_cmd = (
-                    f'python("import maya.cmds as cmds; '
-                    f"cmds.commandPort(name=':{python_port}', sourceType='python')\")"
-                )
-
-                try:
-                    await client._send_receive(mel_cmd)
-                    await client.disconnect()
-
-                    # Connect to the new Python port
-                    python_client = MayaClient(host, python_port, timeout=60.0)
-                    await python_client.connect()
-                    await python_client.bootstrap()
-                    return python_client
-
-                except Exception as e:
-                    logger.debug(f"Failed to open Python port via MEL: {e}")
-                    await client.disconnect()
-                    return None
-
-            else:
-                await client.disconnect()
-                return None
-
+            new_client = await client.bootstrap()
+            await client.disconnect()
+            return new_client
         except MayaConnectionError:
             return None
         except Exception as e:
@@ -178,9 +161,18 @@ class SessionManager:
             except Exception:
                 dead_keys.append(key)
 
-        for key in dead_keys:
-            client = self._sessions.pop(key)
-            logger.info(f"Pruned dead session: {key}")
+        for session_key in dead_keys:
+            client = self._sessions.pop(session_key)
+            logger.info(f"Pruned dead session: {session_key}")
+
+            # Remove from config mapping
+            config_key = None
+            for cfg_key, sess_key in self._config_to_session.items():
+                if sess_key == session_key:
+                    config_key = cfg_key
+                    break
+            if config_key:
+                del self._config_to_session[config_key]
 
             # If this was the active session, clear it
             if self._active_session is client:
@@ -327,3 +319,24 @@ class SessionManager:
         logger.info(f"Added session: {key}")
 
         return client
+
+
+if __name__ == "__main__":
+    cmd = """
+import maya.cmds
+print('one')
+print('two')
+maya.cmds.ls(cameras=True)
+"""
+    async def run():
+        session_manager = SessionManager()
+        print("starting")
+        await session_manager.start()
+        print("started")
+        result = await session_manager.list_sessions()
+        print(result)
+
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        pass
