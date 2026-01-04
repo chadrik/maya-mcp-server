@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-import sys
 import json
+import sys
 import traceback
+from typing import Any
 
 
 class StreamWriter:
@@ -77,9 +76,10 @@ def get_buffered_output() -> str:
 
 def get_session_info() -> str:
     """Return session information as JSON."""
-    import maya.cmds as cmds
-    import os
     import getpass
+    import os
+
+    import maya.cmds as cmds
 
     scene_path = cmds.file(query=True, sceneName=True) or ""
     scene_name = os.path.basename(scene_path) if scene_path else "untitled"

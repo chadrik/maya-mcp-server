@@ -86,8 +86,10 @@ class TestSessionManagerDiscovery:
 
     async def test_scan_finds_session(self, mock_port: int) -> None:
         """Test that scanning finds a running Maya session."""
-        mock_ports = [{'port': mock_port, 'address': '127.0.0.1', 'family': 'IPv4'}]
-        with patch('maya_mcp_server.session_manager.get_maya_listening_ports', return_value=mock_ports):
+        mock_ports = [{"port": mock_port, "address": "127.0.0.1", "family": "IPv4"}]
+        with patch(
+            "maya_mcp_server.session_manager.get_maya_listening_ports", return_value=mock_ports
+        ):
             async with MockMayaServer(port=mock_port):
                 manager = SessionManager(scan_interval=100.0)
                 await manager.start()
@@ -100,8 +102,10 @@ class TestSessionManagerDiscovery:
 
     async def test_list_sessions(self, mock_port: int) -> None:
         """Test listing sessions."""
-        mock_ports = [{'port': mock_port, 'address': '127.0.0.1', 'family': 'IPv4'}]
-        with patch('maya_mcp_server.session_manager.get_maya_listening_ports', return_value=mock_ports):
+        mock_ports = [{"port": mock_port, "address": "127.0.0.1", "family": "IPv4"}]
+        with patch(
+            "maya_mcp_server.session_manager.get_maya_listening_ports", return_value=mock_ports
+        ):
             async with MockMayaServer(port=mock_port):
                 manager = SessionManager(scan_interval=100.0)
                 await manager.start()

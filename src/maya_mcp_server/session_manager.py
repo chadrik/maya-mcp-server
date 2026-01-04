@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import AsyncIterator
 
 from maya_mcp_server.client import MayaClient, MayaConnectionError
 from maya_mcp_server.types import PortType, SessionInfo
 from maya_mcp_server.utils import get_maya_listening_ports
+
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +91,8 @@ class SessionManager:
         logger.debug(f"Found Maya listening on {len(listening_ports)} port(s)")
 
         for port_info in listening_ports:
-            host = port_info['address']
-            port = port_info['port']
+            host = port_info["address"]
+            port = port_info["port"]
             key = self._session_key(host, port)
 
             # Skip if we already have this session
@@ -116,7 +116,8 @@ class SessionManager:
         Returns:
             MayaClient if successful, None otherwise
         """
-        client = MayaClient(host, port, timeout=5.0)
+        # Use longer timeout to support long-running operations
+        client = MayaClient(host, port, timeout=60.0)
 
         try:
             await client.connect()
@@ -142,7 +143,7 @@ class SessionManager:
                     await client.disconnect()
 
                     # Connect to the new Python port
-                    python_client = MayaClient(host, python_port, timeout=5.0)
+                    python_client = MayaClient(host, python_port, timeout=60.0)
                     await python_client.connect()
                     await python_client.bootstrap()
                     return python_client

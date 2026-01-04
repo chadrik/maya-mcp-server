@@ -1,4 +1,10 @@
-"""Tests for MCP server tools."""
+"""Tests for MCP server tools.
+
+Note: MCP tools are decorated with @mcp.tool which returns a FunctionTool object.
+To call them in tests, use the .fn attribute to access the underlying function:
+    await server.list_sessions.fn()
+    await server.use_session.fn(host, port)
+"""
 
 from __future__ import annotations
 
@@ -30,95 +36,77 @@ class TestServerTools:
 
     async def test_list_sessions(self, setup_server: SessionManager) -> None:
         """Test list_sessions tool."""
-        sessions = await server._list_sessions()
+        sessions = await server.list_sessions.fn()
         assert len(sessions) == 1
 
-    async def test_use_session(
-        self, setup_server: SessionManager, mock_port: int
-    ) -> None:
+    async def test_use_session(self, setup_server: SessionManager, mock_port: int) -> None:
         """Test use_session tool."""
-        info = await server._use_session("127.0.0.1", mock_port)
+        info = await server.use_session.fn("127.0.0.1", mock_port)
         assert info["port"] == mock_port
 
-    async def test_unuse_session(
-        self, setup_server: SessionManager, mock_port: int
-    ) -> None:
+    async def test_unuse_session(self, setup_server: SessionManager, mock_port: int) -> None:
         """Test unuse_session tool."""
-        await server._use_session("127.0.0.1", mock_port)
-        result = await server._unuse_session()
+        await server.use_session.fn("127.0.0.1", mock_port)
+        result = await server.unuse_session.fn()
         assert "deactivated" in result.lower()
         assert setup_server.active_session is None
 
     async def test_unuse_session_no_active(self, setup_server: SessionManager) -> None:
         """Test unuse_session when no active session."""
-        result = await server._unuse_session()
+        result = await server.unuse_session.fn()
         assert "no active session" in result.lower()
 
-    async def test_get_session_info(
-        self, setup_server: SessionManager, mock_port: int
-    ) -> None:
+    async def test_get_session_info(self, setup_server: SessionManager, mock_port: int) -> None:
         """Test get_session_info tool."""
-        await server._use_session("127.0.0.1", mock_port)
-        info = await server._get_session_info()
+        await server.use_session.fn("127.0.0.1", mock_port)
+        info = await server.get_session_info.fn()
         assert info["port"] == mock_port
         assert "pid" in info
         assert "user" in info
 
-    async def test_get_session_info_requires_session(
-        self, setup_server: SessionManager
-    ) -> None:
+    async def test_get_session_info_requires_session(self, setup_server: SessionManager) -> None:
         """Test that get_session_info requires an active session."""
         # Clear active session
-        await server._unuse_session()
+        await server.unuse_session.fn()
 
         with pytest.raises(RuntimeError, match="No active session"):
-            await server._get_session_info()
+            await server.get_session_info.fn()
 
-    async def test_get_output(
-        self, setup_server: SessionManager, mock_port: int
-    ) -> None:
+    async def test_get_output(self, setup_server: SessionManager, mock_port: int) -> None:
         """Test get_output tool."""
-        await server._use_session("127.0.0.1", mock_port)
-        await server._execute_code("print('hello')")
-        output = await server._get_output()
+        await server.use_session.fn("127.0.0.1", mock_port)
+        await server.execute_code.fn("print('hello')")
+        output = await server.get_output.fn()
         assert "stdout" in output
         assert "stderr" in output
 
-    async def test_execute_code_requires_session(
-        self, setup_server: SessionManager
-    ) -> None:
+    async def test_execute_code_requires_session(self, setup_server: SessionManager) -> None:
         """Test that execute_code requires an active session."""
         # Clear active session
-        await server._unuse_session()
+        await server.unuse_session.fn()
 
         with pytest.raises(RuntimeError, match="No active session"):
-            await server._execute_code("1+1")
+            await server.execute_code.fn("1+1")
 
-    async def test_execute_code(
-        self, setup_server: SessionManager, mock_port: int
-    ) -> None:
+    async def test_execute_code(self, setup_server: SessionManager, mock_port: int) -> None:
         """Test execute_code tool."""
-        await server._use_session("127.0.0.1", mock_port)
-        result = await server._execute_code("1+1")
+        await server.use_session.fn("127.0.0.1", mock_port)
+        result = await server.execute_code.fn("1+1")
         assert "error" in result
         assert result["error"] is None
 
-    async def test_write_module_requires_session(
-        self, setup_server: SessionManager
-    ) -> None:
+    async def test_write_module_requires_session(self, setup_server: SessionManager) -> None:
         """Test that write_module requires an active session."""
         # Clear active session
-        await server._unuse_session()
+        await server.unuse_session.fn()
 
         with pytest.raises(RuntimeError, match="No active session"):
-            await server._write_module("test", "x = 1")
+            await server.write_module.fn("test", "x = 1")
 
-    async def test_write_module(
-        self, setup_server: SessionManager, mock_port: int
-    ) -> None:
+    async def test_write_module(self, setup_server: SessionManager, mock_port: int) -> None:
         """Test write_module tool."""
-        await server._use_session("127.0.0.1", mock_port)
-        result = await server._write_module("mymod", "x = 42")
+        await server.use_session.fn("127.0.0.1", mock_port)
+        result = await server.write_module.fn("mymod", "x = 42")
         assert "success" in result.lower() or "created" in result.lower()
 
 

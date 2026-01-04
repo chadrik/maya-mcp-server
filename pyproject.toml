@@ -58,6 +58,11 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["maya_mcp_server"]
+force-single-line = false
+lines-after-imports = 2
+
 [tool.mypy]
 python_version = "3.10"
 strict = true

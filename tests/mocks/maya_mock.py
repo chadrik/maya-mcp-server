@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Callable
+from collections.abc import Callable
+
 
 logger = logging.getLogger(__name__)
 
@@ -112,22 +113,26 @@ class MockMayaServer:
                 return ""
 
             if "_mcp_helper.get_session_info()" in command:
-                return json.dumps({
-                    "pid": 12345,
-                    "user": "testuser",
-                    "maya_version": "2024",
-                    "scene_name": "untitled",
-                    "scene_path": "",
-                })
+                return json.dumps(
+                    {
+                        "pid": 12345,
+                        "user": "testuser",
+                        "maya_version": "2024",
+                        "scene_name": "untitled",
+                        "scene_path": "",
+                    }
+                )
 
             if "_mcp_helper.execute_with_capture(" in command:
                 # Parse and execute the wrapped code
                 # This is a simplified mock - just return success
                 # Note: stdout/stderr are now delivered via MCP Resources, not here
-                return json.dumps({
-                    "result": None,
-                    "error": None,
-                })
+                return json.dumps(
+                    {
+                        "result": None,
+                        "error": None,
+                    }
+                )
 
             if "_mcp_helper.install_stream_capture()" in command:
                 return ""
@@ -136,16 +141,20 @@ class MockMayaServer:
                 return ""
 
             if "_mcp_helper.get_buffered_output()" in command:
-                return json.dumps({
-                    "stdout": "",
-                    "stderr": "",
-                })
+                return json.dumps(
+                    {
+                        "stdout": "",
+                        "stderr": "",
+                    }
+                )
 
             if "_mcp_helper.create_module(" in command:
-                return json.dumps({
-                    "success": True,
-                    "message": "Module created successfully",
-                })
+                return json.dumps(
+                    {
+                        "success": True,
+                        "message": "Module created successfully",
+                    }
+                )
 
             # Simple expressions
             result = eval(command, self._globals)
@@ -175,7 +184,7 @@ class MockMayaServer:
         """Set a custom command handler."""
         self._handler = handler
 
-    async def __aenter__(self) -> "MockMayaServer":
+    async def __aenter__(self) -> MockMayaServer:
         """Async context manager entry."""
         await self.start()
         return self

@@ -10,6 +10,7 @@ from fastmcp import FastMCP
 from maya_mcp_server.session_manager import SessionManager
 from maya_mcp_server.types import ResultType, SessionInfo
 
+
 logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
@@ -20,9 +21,6 @@ mcp = FastMCP(
 # Global session manager - initialized when server starts
 _session_manager: SessionManager | None = None
 
-# Storage for stdout/stderr content per session
-_session_output_buffers: dict[str, dict[str, str]] = {}
-
 
 def get_session_manager() -> SessionManager:
     """Get the global session manager."""
@@ -31,119 +29,9 @@ def get_session_manager() -> SessionManager:
     return _session_manager
 
 
-# Implementation functions (can be called directly in tests)
-
-
-async def _list_sessions() -> list[SessionInfo]:
-    """List all active Maya sessions."""
-    manager = get_session_manager()
-    return await manager.list_sessions()
-
-
-async def _use_session(host: str, port: int) -> SessionInfo:
-    """Activate a Maya session for subsequent operations."""
-    manager = get_session_manager()
-    client = await manager.use_session(host, port)
-
-    # Initialize output buffer for this session
-    session_key = f"{host}:{port}"
-    _session_output_buffers[session_key] = {"stdout": "", "stderr": ""}
-
-    return await client.session_info()
-
-
-async def _unuse_session() -> str:
-    """Deactivate the current Maya session and release all resources."""
-    manager = get_session_manager()
-
-    if manager.active_session is None:
-        return "No active session to deactivate"
-
-    session_key = manager.active_session.key
-    await manager.unuse_session()
-
-    # Clean up output buffer
-    if session_key and session_key in _session_output_buffers:
-        del _session_output_buffers[session_key]
-
-    return f"Session {session_key} deactivated and resources released"
-
-
-async def _get_session_info() -> SessionInfo:
-    """Get updated information about the currently active Maya session."""
-    manager = get_session_manager()
-    client = manager.active_session
-
-    if client is None:
-        raise RuntimeError("No active session. Use use_session first.")
-
-    return await client.session_info()
-
-
-async def _write_module(
-    name: str,
-    code: str,
-    overwrite: bool = False,
-) -> str:
-    """Create a virtual Python module in the active Maya session."""
-    manager = get_session_manager()
-    client = manager.active_session
-
-    if client is None:
-        raise RuntimeError("No active session. Use use_session first.")
-
-    return await client.write_module(name, code, overwrite)
-
-
-async def _execute_code(
-    code: str,
-    result_type: str = "NONE",
-) -> dict[str, Any]:
-    """Execute Python code in the active Maya session."""
-    manager = get_session_manager()
-    client = manager.active_session
-
-    if client is None:
-        raise RuntimeError("No active session. Use use_session first.")
-
-    rt = ResultType(result_type)
-    result = await client.execute_code(code, rt)
-
-    # Fetch any buffered output and store it
-    session_key = manager.active_session.key
-    if session_key:
-        try:
-            output = await client.get_buffered_output()
-            if session_key not in _session_output_buffers:
-                _session_output_buffers[session_key] = {"stdout": "", "stderr": ""}
-            _session_output_buffers[session_key]["stdout"] += output.get("stdout", "")
-            _session_output_buffers[session_key]["stderr"] += output.get("stderr", "")
-        except Exception as e:
-            logger.debug(f"Failed to get buffered output: {e}")
-
-    return dict(result)
-
-
-async def _get_output(clear: bool = True) -> dict[str, str]:
-    """Get captured stdout/stderr output from the active session."""
-    manager = get_session_manager()
-
-    if manager.active_session is None:
-        raise RuntimeError("No active session. Use use_session first.")
-
-    session_key = manager.active_session.key
-    if not session_key or session_key not in _session_output_buffers:
-        return {"stdout": "", "stderr": ""}
-
-    output = _session_output_buffers[session_key].copy()
-
-    if clear:
-        _session_output_buffers[session_key] = {"stdout": "", "stderr": ""}
-
-    return output
-
-
-# MCP Tool decorators
+# MCP Tools
+# Note: For testing, access the underlying function via tool.fn
+# Example: list_sessions.fn() calls the actual implementation
 
 
 @mcp.tool
@@ -160,7 +48,8 @@ async def list_sessions() -> list[SessionInfo]:
     - scene_name: Current scene filename
     - scene_path: Full path to current scene
     """
-    return await _list_sessions()
+    manager = get_session_manager()
+    return await manager.list_sessions()
 
 
 @mcp.tool
@@ -183,7 +72,10 @@ async def use_session(host: str, port: int) -> SessionInfo:
     - maya://sessions/{host}:{port}/stdout
     - maya://sessions/{host}:{port}/stderr
     """
-    return await _use_session(host, port)
+    manager = get_session_manager()
+    client = await manager.use_session(host, port)
+
+    return await client.session_info()
 
 
 @mcp.tool
@@ -200,7 +92,15 @@ async def unuse_session() -> str:
     - Clears the active session, requiring use_session to be called
       again before execute_code or write_module can be used
     """
-    return await _unuse_session()
+    manager = get_session_manager()
+
+    if manager.active_session is None:
+        return "No active session to deactivate"
+
+    session_key = manager.active_session.key
+    await manager.unuse_session()
+
+    return f"Session {session_key} deactivated and resources released"
 
 
 @mcp.tool
@@ -221,7 +121,13 @@ async def get_session_info() -> SessionInfo:
     Raises:
         RuntimeError: If no session is currently active
     """
-    return await _get_session_info()
+    manager = get_session_manager()
+    client = manager.active_session
+
+    if client is None:
+        raise RuntimeError("No active session. Use use_session first.")
+
+    return await client.session_info()
 
 
 @mcp.tool
@@ -254,7 +160,13 @@ async def write_module(
         # Then use it:
         execute_code("import mytools; mytools.create_cube('myCube')")
     """
-    return await _write_module(name, code, overwrite)
+    manager = get_session_manager()
+    client = manager.active_session
+
+    if client is None:
+        raise RuntimeError("No active session. Use use_session first.")
+
+    return await client.write_module(name, code, overwrite)
 
 
 @mcp.tool
@@ -290,7 +202,23 @@ async def execute_code(
         # Get JSON result
         execute_code("cmds.ls(type='mesh')", result_type="JSON")
     """
-    return await _execute_code(code, result_type)
+    manager = get_session_manager()
+    client = manager.active_session
+
+    if client is None:
+        raise RuntimeError("No active session. Use use_session first.")
+
+    rt = ResultType(result_type)
+    result = await client.execute_code(code, rt)
+
+    # Fetch any buffered output and store it in the client
+    try:
+        output = await client.get_buffered_output()
+        client.append_output(output.get("stdout", ""), output.get("stderr", ""))
+    except Exception as e:
+        logger.debug(f"Failed to get buffered output: {e}")
+
+    return dict(result)
 
 
 @mcp.tool
@@ -310,7 +238,13 @@ async def get_output(clear: bool = True) -> dict[str, str]:
     execute_code calls. For real-time streaming, subscribe to the
     MCP Resources instead.
     """
-    return await _get_output(clear)
+    manager = get_session_manager()
+    client = manager.active_session
+
+    if client is None:
+        raise RuntimeError("No active session. Use use_session first.")
+
+    return client.get_accumulated_output(clear=clear)
 
 
 @mcp.tool
@@ -348,17 +282,21 @@ async def session_stdout(host: str, port: str) -> str:
 
     Returns buffered stdout content since last read.
     """
+    manager = get_session_manager()
     session_key = f"{host}:{port}"
 
-    if session_key not in _session_output_buffers:
+    # Get the client for this session
+    client = manager._sessions.get(session_key)
+    if client is None:
         return ""
 
-    stdout = _session_output_buffers[session_key].get("stdout", "")
+    # Get stdout and clear it
+    output = client.get_accumulated_output(clear=True)
 
-    # Clear the stdout buffer after reading
-    _session_output_buffers[session_key]["stdout"] = ""
+    # Put stderr back since we only want stdout
+    client.append_output(stderr=output["stderr"])
 
-    return stdout
+    return output["stdout"]
 
 
 @mcp.resource("maya://sessions/{host}:{port}/stderr")
@@ -368,17 +306,21 @@ async def session_stderr(host: str, port: str) -> str:
 
     Returns buffered stderr content since last read.
     """
+    manager = get_session_manager()
     session_key = f"{host}:{port}"
 
-    if session_key not in _session_output_buffers:
+    # Get the client for this session
+    client = manager._sessions.get(session_key)
+    if client is None:
         return ""
 
-    stderr = _session_output_buffers[session_key].get("stderr", "")
+    # Get stderr and clear it
+    output = client.get_accumulated_output(clear=True)
 
-    # Clear the stderr buffer after reading
-    _session_output_buffers[session_key]["stderr"] = ""
+    # Put stdout back since we only want stderr
+    client.append_output(stdout=output["stdout"])
 
-    return stderr
+    return output["stderr"]
 
 
 async def initialize_session_manager(

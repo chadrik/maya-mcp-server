@@ -20,6 +20,7 @@ from maya_mcp_server.bootstrap import (
 )
 from maya_mcp_server.types import ExecutionResult, PortType, ResultType, SessionInfo
 
+
 if TYPE_CHECKING:
     pass
 
@@ -67,6 +68,9 @@ class MayaClient:
         self._session_info: SessionInfo | None = None
         self._port_type: PortType = PortType.UNKNOWN
         self._lock = asyncio.Lock()
+        # Output buffers for stdout/stderr capture
+        self._stdout_buffer: str = ""
+        self._stderr_buffer: str = ""
 
     @property
     def key(self) -> str:
@@ -352,6 +356,44 @@ class MayaClient:
         response = await self._send_receive(GET_BUFFERED_OUTPUT)
         return json.loads(response)
 
+    def append_output(self, stdout: str = "", stderr: str = "") -> None:
+        """
+        Append output to the client's buffers.
+
+        This is called after execute_code to accumulate output.
+
+        Args:
+            stdout: Stdout content to append
+            stderr: Stderr content to append
+        """
+        if stdout:
+            self._stdout_buffer += stdout
+        if stderr:
+            self._stderr_buffer += stderr
+
+    def get_accumulated_output(self, clear: bool = True) -> dict[str, str]:
+        """
+        Get accumulated stdout/stderr output.
+
+        Args:
+            clear: If True, clear the buffers after reading
+
+        Returns:
+            Dict with "stdout" and "stderr" keys
+        """
+        output = {"stdout": self._stdout_buffer, "stderr": self._stderr_buffer}
+
+        if clear:
+            self._stdout_buffer = ""
+            self._stderr_buffer = ""
+
+        return output
+
+    def clear_output(self) -> None:
+        """Clear the accumulated output buffers."""
+        self._stdout_buffer = ""
+        self._stderr_buffer = ""
+
     async def ping(self) -> bool:
         """
         Check if the Maya connection is alive.
@@ -365,7 +407,7 @@ class MayaClient:
         except Exception:
             return False
 
-    async def __aenter__(self) -> "MayaClient":
+    async def __aenter__(self) -> MayaClient:
         """Async context manager entry."""
         await self.connect()
         return self

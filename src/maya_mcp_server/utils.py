@@ -3,6 +3,7 @@ import socket
 
 import psutil
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,10 +43,12 @@ def get_maya_listening_ports() -> list[dict]:
                 and conn.type == socket.SOCK_STREAM
                 and conn.family == socket.AF_INET
             ):
-                listening_ports.append({
-                    "port": conn.laddr.port,
-                    "address": conn.laddr.ip,
-                })
+                listening_ports.append(
+                    {
+                        "port": conn.laddr.port,
+                        "address": conn.laddr.ip,
+                    }
+                )
 
     except psutil.AccessDenied:
         logger.warning("Access denied getting Maya connections - try running as administrator/sudo")

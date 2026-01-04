@@ -25,9 +25,7 @@ class TestMayaClientConnection:
         with pytest.raises(MayaConnectionError):
             await client.connect()
 
-    async def test_context_manager(
-        self, mock_maya_server: MockMayaServer, mock_port: int
-    ) -> None:
+    async def test_context_manager(self, mock_maya_server: MockMayaServer, mock_port: int) -> None:
         """Test async context manager."""
         async with MayaClient(port=mock_port) as client:
             assert client.is_connected
@@ -71,17 +69,13 @@ class TestMayaClientExecution:
         async with MayaClient(port=mock_port) as client:
             assert await client.ping()
 
-    async def test_bootstrap(
-        self, mock_maya_server: MockMayaServer, mock_port: int
-    ) -> None:
+    async def test_bootstrap(self, mock_maya_server: MockMayaServer, mock_port: int) -> None:
         """Test session bootstrap."""
         async with MayaClient(port=mock_port) as client:
             await client.bootstrap()
             assert client._bootstrapped
 
-    async def test_session_info(
-        self, mock_maya_server: MockMayaServer, mock_port: int
-    ) -> None:
+    async def test_session_info(self, mock_maya_server: MockMayaServer, mock_port: int) -> None:
         """Test getting session info."""
         async with MayaClient(port=mock_port) as client:
             info = await client.session_info()
@@ -111,9 +105,7 @@ class TestMayaClientExecution:
             assert result["error"] is None
             # Note: mock returns None, real Maya would return [1, 2, 3]
 
-    async def test_write_module(
-        self, mock_maya_server: MockMayaServer, mock_port: int
-    ) -> None:
+    async def test_write_module(self, mock_maya_server: MockMayaServer, mock_port: int) -> None:
         """Test creating a virtual module."""
         async with MayaClient(port=mock_port) as client:
             await client.bootstrap()
