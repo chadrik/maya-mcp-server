@@ -16,6 +16,7 @@ from maya_mcp_server.bootstrap import (
     INSTALL_STREAM_CAPTURE,
     UNINSTALL_STREAM_CAPTURE,
     get_bootstrap_code,
+    get_helper_module_code,
 )
 from maya_mcp_server.types import ExecutionResult, PortType, ResultType, SessionInfo
 
@@ -217,6 +218,13 @@ class MayaClient:
         bootstrap_code = get_bootstrap_code()
         bootstrap_cmd = f"exec({bootstrap_code!r}, globals())"
         await self._send_receive(bootstrap_cmd)
+        # We've now bootstrapped the create_module function, which we use to create
+        # the helper module:
+        helper_code = get_helper_module_code()
+        cmd = CREATE_MODULE_TEMPLATE.format(name="maya_mcp", code=helper_code, overwrite=False)
+        # Remove the module name from create_module since it doesn't exist there yet.
+        cmd = cmd.split(".", 1)[-1]
+        await self._send_receive(cmd)
         self._bootstrapped = True
         logger.info("Maya session bootstrapped")
 

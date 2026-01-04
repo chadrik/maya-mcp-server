@@ -16,7 +16,7 @@ import importlib.resources
 from pathlib import Path
 
 
-def get_bootstrap_code() -> str:
+def _get_code(module_name: str) -> str:
     """
     Get the bootstrap code that creates the _mcp module in Maya.
 
@@ -30,20 +30,43 @@ def get_bootstrap_code() -> str:
     try:
         if hasattr(importlib.resources, "files"):
             # Python 3.9+
-            bootstrap_file = (
-                importlib.resources.files("maya_mcp_server") / "maya_bootstrap.py"
-            )
+            bootstrap_file = importlib.resources.files("maya_mcp_server") / f"{module_name}.py"
             return bootstrap_file.read_text(encoding="utf-8")
     except (AttributeError, TypeError):
         pass
 
     # Fallback: use __file__ to locate maya_bootstrap.py
-    bootstrap_path = Path(__file__).parent / "maya_bootstrap.py"
+    bootstrap_path = Path(__file__).parent / f"{module_name}.py"
     return bootstrap_path.read_text(encoding="utf-8")
 
 
+def get_bootstrap_code() -> str:
+    """
+    Get the bootstrap code that creates the _mcp module in Maya.
+
+    The code is loaded from maya_bootstrap.py and must be executed via
+    exec(code, globals()) to persist definitions in Maya's global namespace.
+
+    Returns:
+        Python source code as a string
+    """
+    # FIXME: instead of storing create_module in a seprate file we should be able to extract
+    #  just the necessary lines of code using inspect
+    return _get_code("maya_bootstrap")
+
+
+def get_helper_module_code() -> str:
+    """
+    Get the helper code that becomes the maya_mcp module in Maya.
+
+    Returns:
+        Python source code as a string
+    """
+    return _get_code("maya_mcp_helper") + _get_code("maya_bootstrap")
+
+
 # Access the helper via __import__ (works in single expressions)
-_MCP_HELPER = "__import__('_mcp').helper"
+_MCP_HELPER = "__import__('maya_mcp')"
 
 # Command templates that use __import__ to access the persistent _mcp module
 GET_SESSION_INFO = f"{_MCP_HELPER}.get_session_info()"
@@ -54,4 +77,4 @@ UNINSTALL_STREAM_CAPTURE = f"{_MCP_HELPER}.uninstall_stream_capture()"
 GET_BUFFERED_OUTPUT = f"{_MCP_HELPER}.get_buffered_output()"
 
 # Check if bootstrap has been done
-CHECK_BOOTSTRAP = "'_mcp' in __import__('sys').modules"
+CHECK_BOOTSTRAP = "'maya_mcp' in __import__('sys').modules"
