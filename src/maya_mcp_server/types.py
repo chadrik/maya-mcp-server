@@ -1,5 +1,6 @@
 """Type definitions for maya-mcp-server."""
 
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, TypedDict
 
@@ -65,3 +66,15 @@ class MayaListeningPort(TypedDict):
     port: int  # Port number
     address: str  # IP address (usually 127.0.0.1)
     process_id: int  # PID of the Maya process
+
+
+@dataclass
+class CommandResponse:
+    """Response from a Maya command execution.
+
+    This is the unified return type for _send_receive in both
+    MayaClient and MayaQtClient.
+    """
+
+    result: Any  # The result value (can be None)
+    error: ErrorInfo | None  # Error info if command failed

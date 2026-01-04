@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from typing import Any
 
 from fastmcp import FastMCP
@@ -173,7 +174,7 @@ async def write_module(
 async def execute_code(
     code: str,
     result_type: str = "NONE",
-) -> dict[str, Any]:
+) -> Any:
     """
     Execute Python code in the active Maya session.
 
@@ -187,9 +188,7 @@ async def execute_code(
             - "RAW": Evaluate expression, return string representation
 
     Returns:
-        ExecutionResult containing:
-        - result: Captured result (None if result_type is NONE)
-        - error: Exception info if an error occurred, else None
+        Captured result (None if result_type is NONE)
 
     Note: stdout and stderr are delivered in real-time via MCP Resource
     subscriptions (maya://sessions/{host}:{port}/stdout and /stderr).
@@ -218,7 +217,7 @@ async def execute_code(
     except Exception as e:
         logger.debug(f"Failed to get buffered output: {e}")
 
-    return dict(result)
+    return result.result
 
 
 @mcp.tool

@@ -119,7 +119,9 @@ class SessionManager:
                 self._sessions[client.key] = client
                 # Track which config port created this session
                 self._config_to_session[config_key] = client.key
-                logger.info(f"Discovered Maya session at {client.key} (PID {port_info['process_id']})")
+                logger.info(
+                    f"Discovered Maya session at {client.key} (PID {port_info['process_id']})"
+                )
 
     async def _probe_port(self, host: str, port: int) -> MayaClient | None:
         """
@@ -328,6 +330,7 @@ print('one')
 print('two')
 maya.cmds.ls(cameras=True)
 """
+
     async def run():
         session_manager = SessionManager()
         print("starting")

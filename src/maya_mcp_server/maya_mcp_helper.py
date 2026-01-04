@@ -132,6 +132,7 @@ def execute(code: str, result_type: str = "NONE") -> str:
 
 def start_command_port(port: int) -> str:
     import maya.cmds as cmds
+
     cmds.commandPort(name=f":{port}", sourceType="python")
     return json.dumps({"success": True, "port": port})
 
@@ -179,7 +180,7 @@ class QtCommandServer:
         # Disconnect all clients
         for client_id in list(self._clients.keys()):
             client_info = self._clients[client_id]
-            client_info['socket'].disconnectFromHost()
+            client_info["socket"].disconnectFromHost()
 
         self._clients.clear()
         self._server.close()
@@ -198,11 +199,7 @@ class QtCommandServer:
         self._next_client_id += 1
 
         # Store client info
-        self._clients[client_id] = {
-            'socket': socket,
-            'input_buffer': '',
-            'output_queue': []
-        }
+        self._clients[client_id] = {"socket": socket, "input_buffer": "", "output_queue": []}
 
         # Connect signals with client_id
         socket.readyRead.connect(lambda cid=client_id: self._on_ready_read(cid))
@@ -223,7 +220,7 @@ class QtCommandServer:
         # Cleanup stale clients (disconnected sockets)
         stale_clients = []
         for client_id, client_info in self._clients.items():
-            socket = client_info['socket']
+            socket = client_info["socket"]
             if not socket.isValid() or socket.state() != QTcpSocket.ConnectedState:
                 stale_clients.append(client_id)
 
@@ -232,27 +229,27 @@ class QtCommandServer:
 
         # Process each client
         for client_id, client_info in list(self._clients.items()):
-            socket = client_info['socket']
-            input_buffer = client_info['input_buffer']
-            output_queue = client_info['output_queue']
+            socket = client_info["socket"]
+            input_buffer = client_info["input_buffer"]
+            output_queue = client_info["output_queue"]
 
             # Process incoming messages
             if socket.bytesAvailable() > 0:
-                data = bytes(socket.readAll()).decode('utf-8')
+                data = bytes(socket.readAll()).decode("utf-8")
                 input_buffer += data
-                client_info['input_buffer'] = input_buffer
+                client_info["input_buffer"] = input_buffer
 
                 # Process complete lines
-                while '\n' in input_buffer:
-                    line, input_buffer = input_buffer.split('\n', 1)
-                    client_info['input_buffer'] = input_buffer
+                while "\n" in input_buffer:
+                    line, input_buffer = input_buffer.split("\n", 1)
+                    client_info["input_buffer"] = input_buffer
                     if line.strip():
                         self._handle_message(client_id, line.strip())
 
             # Process outgoing messages
             if output_queue:
                 message = output_queue.pop(0)
-                socket.write((message + '\n').encode('utf-8'))
+                socket.write((message + "\n").encode("utf-8"))
                 socket.flush()
 
     def _handle_message(self, client_id, line):
@@ -260,7 +257,7 @@ class QtCommandServer:
         if client_id not in self._clients:
             return
 
-        output_queue = self._clients[client_id]['output_queue']
+        output_queue = self._clients[client_id]["output_queue"]
 
         try:
             request = json.loads(line)
@@ -273,8 +270,8 @@ class QtCommandServer:
                 "error": {
                     "type": f"{type(e).__module__}.{type(e).__name__}",
                     "message": str(e),
-                    "traceback": traceback.format_exc()
-                }
+                    "traceback": traceback.format_exc(),
+                },
             }
             output_queue.append(json.dumps(error_response))
 
@@ -289,7 +286,11 @@ class QtCommandServer:
             if method == "execute":
                 result_str = execute(params.get("code", ""), params.get("result_type", "NONE"))
                 result_obj = json.loads(result_str)
-                return {"id": req_id, "result": result_obj.get("result"), "error": result_obj.get("error")}
+                return {
+                    "id": req_id,
+                    "result": result_obj.get("result"),
+                    "error": result_obj.get("error"),
+                }
 
             elif method == "get_session_info":
                 result_str = get_session_info()
@@ -314,12 +315,10 @@ class QtCommandServer:
                     return {
                         "id": req_id,
                         "result": None,
-                        "error": {"message": "create_module function not available"}
+                        "error": {"message": "create_module function not available"},
                     }
                 result_str = create_module_func(
-                    params.get("name", ""),
-                    params.get("code", ""),
-                    params.get("overwrite", False)
+                    params.get("name", ""), params.get("code", ""), params.get("overwrite", False)
                 )
                 result_obj = json.loads(result_str)
                 if "error" in result_obj:
@@ -333,7 +332,7 @@ class QtCommandServer:
                 return {
                     "id": req_id,
                     "result": None,
-                    "error": {"message": f"Unknown method: {method}"}
+                    "error": {"message": f"Unknown method: {method}"},
                 }
         except Exception as e:
             return {
@@ -342,8 +341,8 @@ class QtCommandServer:
                 "error": {
                     "type": f"{type(e).__module__}.{type(e).__name__}",
                     "message": str(e),
-                    "traceback": traceback.format_exc()
-                }
+                    "traceback": traceback.format_exc(),
+                },
             }
 
 
@@ -363,13 +362,15 @@ def start_qt_server():
         _qt_server.start()
         return json.dumps({"port": _qt_server.port, "already_running": False})
     except Exception as e:
-        return json.dumps({
-            "error": {
-                "type": f"{type(e).__module__}.{type(e).__name__}",
-                "message": str(e),
-                "traceback": traceback.format_exc()
+        return json.dumps(
+            {
+                "error": {
+                    "type": f"{type(e).__module__}.{type(e).__name__}",
+                    "message": str(e),
+                    "traceback": traceback.format_exc(),
+                }
             }
-        })
+        )
 
 
 def stop_qt_server():
