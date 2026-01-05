@@ -17,6 +17,7 @@ from maya_mcp_server.bootstrap import (
 from maya_mcp_server.types import (
     CommandResponse,
     ExecutionResult,
+    OutputBuffer,
     PortType,
     ResultType,
     SessionInfo,
@@ -143,7 +144,7 @@ class BaseMayaClient(ABC):
         if stderr:
             self._stderr_buffer += stderr
 
-    def get_accumulated_output(self, clear: bool = True) -> dict[str, str]:
+    def get_accumulated_output(self, clear: bool = True) -> OutputBuffer:
         """
         Get accumulated stdout/stderr output.
 
@@ -151,9 +152,9 @@ class BaseMayaClient(ABC):
             clear: If True, clear the buffers after reading
 
         Returns:
-            Dict with "stdout" and "stderr" keys
+            OutputBuffer with stdout and stderr fields
         """
-        output = {"stdout": self._stdout_buffer, "stderr": self._stderr_buffer}
+        output = OutputBuffer(stdout=self._stdout_buffer, stderr=self._stderr_buffer)
 
         if clear:
             self._stdout_buffer = ""
@@ -183,15 +184,19 @@ class BaseMayaClient(ABC):
         await self._send_receive(self.UNINSTALL_STREAM_CAPTURE)
         logger.debug(f"Stream capture uninstalled for {self.host}:{self.port}")
 
-    async def get_buffered_output(self) -> dict[str, str]:
+    async def get_buffered_output(self) -> OutputBuffer:
         """
         Get buffered stdout/stderr content and clear the buffers.
 
         Returns:
-            Dict with "stdout" and "stderr" keys containing captured output.
+            OutputBuffer with stdout and stderr fields containing captured output.
         """
         response = await self._send_receive(self.GET_BUFFERED_OUTPUT)
-        return response.result if response.result is not None else {}
+        result = response.result if response.result is not None else {}
+        return OutputBuffer(
+            stdout=result.get("stdout", ""),
+            stderr=result.get("stderr", ""),
+        )
 
     async def session_info(self) -> SessionInfo:
         """
@@ -203,10 +208,15 @@ class BaseMayaClient(ABC):
         response = await self._send_receive(self.GET_SESSION_INFO)
         info = response.result if response.result is not None else {}
 
-        # Add connection info
-        info["host"] = self.host
-        info["port"] = self.port
-        return info
+        return SessionInfo(
+            host=self.host,
+            port=self.port,
+            pid=info.get("pid", 0),
+            user=info.get("user", ""),
+            maya_version=info.get("maya_version", ""),
+            scene_name=info.get("scene_name", ""),
+            scene_path=info.get("scene_path", ""),
+        )
 
     async def execute_code(
         self,

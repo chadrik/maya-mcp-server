@@ -9,7 +9,7 @@ from typing import Any
 from fastmcp import FastMCP
 
 from maya_mcp_server.session_manager import SessionManager
-from maya_mcp_server.types import ClientType, ResultType, SessionInfo
+from maya_mcp_server.types import ClientType, OutputBuffer, ResultType, SessionInfo
 
 
 logger = logging.getLogger(__name__)
@@ -211,7 +211,7 @@ async def execute_code(
     # Fetch any buffered output and store it in the client
     try:
         output = await client.get_buffered_output()
-        client.append_output(output.get("stdout", ""), output.get("stderr", ""))
+        client.append_output(output.stdout, output.stderr)
     except Exception as e:
         logger.debug(f"Failed to get buffered output: {e}")
 
@@ -219,7 +219,7 @@ async def execute_code(
 
 
 @mcp.tool
-async def get_output(clear: bool = True) -> dict[str, str]:
+async def get_output(clear: bool = True) -> OutputBuffer:
     """
     Get captured stdout/stderr output from the active session.
 
@@ -228,7 +228,7 @@ async def get_output(clear: bool = True) -> dict[str, str]:
                If False, keep the buffer contents.
 
     Returns:
-        Dict with "stdout" and "stderr" keys containing captured output
+        OutputBuffer with stdout and stderr fields containing captured output
         since the last call (or since session activation).
 
     This provides access to stdout/stderr that was captured during
@@ -291,9 +291,9 @@ async def session_stdout(host: str, port: str) -> str:
     output = client.get_accumulated_output(clear=True)
 
     # Put stderr back since we only want stdout
-    client.append_output(stderr=output["stderr"])
+    client.append_output(stderr=output.stderr)
 
-    return output["stdout"]
+    return output.stdout
 
 
 @mcp.resource("maya://sessions/{host}:{port}/stderr")
@@ -315,9 +315,9 @@ async def session_stderr(host: str, port: str) -> str:
     output = client.get_accumulated_output(clear=True)
 
     # Put stdout back since we only want stderr
-    client.append_output(stdout=output["stdout"])
+    client.append_output(stdout=output.stdout)
 
-    return output["stderr"]
+    return output.stderr
 
 
 async def initialize_session_manager(

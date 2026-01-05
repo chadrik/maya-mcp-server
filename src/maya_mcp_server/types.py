@@ -55,16 +55,25 @@ class ExecutionResult(TypedDict):
     error: ErrorInfo | None  # Exception info if error occurred
 
 
-class SessionInfo(TypedDict, total=False):
+@dataclass
+class SessionInfo:
     """Information about a Maya session."""
 
-    host: str
-    port: int
-    pid: int
-    user: str
-    maya_version: str
-    scene_name: str
-    scene_path: str
+    host: str = ""
+    port: int = 0
+    pid: int = 0
+    user: str = ""
+    maya_version: str = ""
+    scene_name: str = ""
+    scene_path: str = ""
+
+
+@dataclass
+class OutputBuffer:
+    """Captured stdout/stderr output."""
+
+    stdout: str = ""
+    stderr: str = ""
 
 
 class MayaListeningPort(TypedDict):

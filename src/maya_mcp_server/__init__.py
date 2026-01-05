@@ -3,6 +3,7 @@
 from maya_mcp_server.types import (
     ErrorInfo,
     ExecutionResult,
+    OutputBuffer,
     PortType,
     ResultType,
     SessionInfo,
@@ -12,6 +13,7 @@ from maya_mcp_server.types import (
 __all__ = [
     "ErrorInfo",
     "ExecutionResult",
+    "OutputBuffer",
     "PortType",
     "ResultType",
     "SessionInfo",
