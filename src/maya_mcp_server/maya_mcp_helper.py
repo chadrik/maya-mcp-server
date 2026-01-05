@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import sys
 import traceback
@@ -16,12 +17,65 @@ except ImportError:
         from PySide6.QtNetwork import QTcpServer, QTcpSocket, QHostAddress
         from PySide6.QtCore import QTimer, QIODevice
     except ImportError:
-        # Qt not available - server functions will fail gracefully
+        # Qt not available - Qt server functions will fail gracefully
         QTcpServer = None
         QTcpSocket = None
         QHostAddress = None
         QTimer = None
         QIODevice = None
+
+CAPTURE_VARIABLE = "_mcp_result"
+
+
+def prepare_code_for_result_capture(code: str, capture_variable: str = CAPTURE_VARIABLE) -> tuple[str, bool]:
+    """
+    Transform Python code to capture the result of the final expression.
+
+    If the final statement is a standalone expression at the module level
+    (not nested in a loop, function, or class, and not an assignment),
+    prepends `_mcp_result = ` to capture its value.
+
+    Args:
+        code: Python source code string
+
+    Returns:
+        A tuple of (transformed_code, was_transformed).
+        If no transformation was needed, returns (original_code, False).
+    """
+    code = code.rstrip()
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return code, False
+
+    if not tree.body:
+        return code, False
+
+    last_stmt = tree.body[-1]
+
+    # Only transform standalone expressions
+    # ast.Expr is a statement node that wraps an expression value
+    # This excludes: assignments, augmented assignments, annotated assignments,
+    # function/class definitions, control flow (if/for/while/try), imports, etc.
+    if not isinstance(last_stmt, ast.Expr):
+        return code, False
+
+    # Get the expression as a string using ast.unparse (Python 3.9+)
+    expr_str = ast.unparse(last_stmt.value)
+
+    # Build the new code: all statements except the last + new assignment
+    # We use ast.unparse for preceding statements to handle edge cases like
+    # semicolon-separated statements on the same line (e.g., "x = 1; 2")
+    preceding_stmts = tree.body[:-1]
+    if preceding_stmts:
+        before = "\n".join(ast.unparse(stmt) for stmt in preceding_stmts) + "\n"
+    else:
+        before = ""
+
+    new_stmt = f"{capture_variable} = {expr_str}\n"
+
+    return before + new_stmt, True
 
 
 class StreamWriter:
@@ -114,13 +168,21 @@ def execute(code: str, result_type: str = "NONE") -> str:
     """Execute code and return result as JSON."""
     result = None
     error = None
+    context = globals()
     try:
-        if result_type == "NONE":
-            exec(compile(code, "<mcp>", "exec"), globals())
-        else:
-            result = eval(compile(code, "<mcp>", "eval"), globals())
+        modified_code, was_modified = prepare_code_for_result_capture(code)
+        if result_type != "NONE" and was_modified is False:
+            raise RuntimeError(
+                "Results were requested but the code cannot be modified to capture a result."
+                "If you want to capture a result, make sure that the last line of code is in "
+                "the module scope (i.e. not in a function or loop")
+
+        exec(compile(modified_code, "<mcp>", "exec"), context)
+        if was_modified:
+            result = context[CAPTURE_VARIABLE]
             if result_type == "JSON":
                 result = json.dumps(result)
+
     except Exception as e:
         error = {
             "type": f"{type(e).__module__}.{type(e).__name__}",

@@ -415,7 +415,7 @@ class MayaClient(BaseMayaClient):
         logger.info(f"Detected port type: {self._port_type.value}")
         return self._port_type
 
-    async def bootstrap(self) -> MayaClient | None:
+    async def _bootstrap(self, overwrite: bool = False) -> None:
         """
         Bootstrap the Maya session with helper functions.
 
@@ -430,33 +430,41 @@ class MayaClient(BaseMayaClient):
                 f"Cannot bootstrap non-Python port (detected: {port_type.value})"
             )
 
-        # Check if already bootstrapped (e.g., from previous connection)
-        check_result = await self._send_receive(self.CHECK_BOOTSTRAP)
-        if str(check_result.result if check_result.result is not None else "").strip() == "True":
-            logger.info("Maya session already bootstrapped, updating module...")
-            # Module exists, but update it to ensure it has latest functions
-            helper_code = get_helper_module_code()
-            await self._send_receive(
-                self.CREATE_MODULE_TEMPLATE,
-                {"name": "maya_mcp", "code": helper_code, "overwrite": True},
-            )
-            logger.info("Maya mcp module updated")
-        else:
-            # Execute bootstrap code using exec() with globals() to persist definitions
-            # Maya command port runs each command in isolated scope, so we must use
-            # exec(..., globals()) to make the code affect the global namespace
-            bootstrap_code = get_bootstrap_code()
-            bootstrap_cmd = f"exec({bootstrap_code!r}, globals())"
-            await self._send_receive(bootstrap_cmd)
-            # We've now bootstrapped the create_module function, which we use to create
-            # the helper module:
-            helper_code = get_helper_module_code()
-            # Remove the module name prefix since create_module doesn't exist yet
-            cmd = f"create_module({{name!r}}, {{code!r}}, {{overwrite!r}})"
-            await self._send_receive(
-                cmd, {"name": "maya_mcp", "code": helper_code, "overwrite": False}
-            )
-            logger.info("Maya session bootstrapped")
+        if not overwrite:
+            # Check if already bootstrapped (e.g., from previous connection)
+            check_result = await self._send_receive(self.CHECK_BOOTSTRAP)
+            if str(check_result.result if check_result.result is not None else "").strip() == "True":
+                logger.info("Maya session already bootstrapped, updating module...")
+                # Module exists, but update it to ensure it has latest functions
+                helper_code = get_helper_module_code()
+                await self._send_receive(
+                    self.CREATE_MODULE_TEMPLATE,
+                    {"name": "maya_mcp", "code": helper_code, "overwrite": True},
+                )
+                logger.info("Maya mcp module updated")
+                return
+
+        # Execute bootstrap code using exec() with globals() to persist definitions
+        # Maya command port runs each command in isolated scope, so we must use
+        # exec(..., globals()) to make the code affect the global namespace
+        bootstrap_code = get_bootstrap_code()
+        bootstrap_cmd = f"exec({bootstrap_code!r}, globals())"
+        await self._send_receive(bootstrap_cmd)
+        # We've now bootstrapped the create_module function, which we use to create
+        # the helper module:
+        helper_code = get_helper_module_code()
+        # Remove the module name prefix since create_module doesn't exist yet
+        cmd = f"create_module({{name!r}}, {{code!r}}, {{overwrite!r}})"
+        await self._send_receive(
+            cmd, {"name": "maya_mcp", "code": helper_code, "overwrite": overwrite}
+        )
+        logger.info("Maya session bootstrapped")
+
+    async def bootstrap(self) -> MayaClient | None:
+        """
+        Boostrap remote session and return a new client
+        """
+        await self._bootstrap()
 
         # Create a dedicated communication port for this client
         new_port = random.randint(COMMUNICATION_PORT_MIN, COMMUNICATION_PORT_MAX)
@@ -746,16 +754,53 @@ class MayaQtClient(BaseMayaClient):
 
 if __name__ == "__main__":
     cmd = """
+import maya.cmds
 maya.cmds.ls(cameras=True)
 """
 
+    port = 7001
+
+    # Native
+    import socket
+
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect(("127.0.0.1", port))
+
+    client.send(cmd.encode('utf-8'))
+
+    result = data = client.recv(1024)
+    while len(data) == 1024:
+        data = client.recv(1024)
+        result += data
+    client.close()
+
+    if result:
+        output = result.decode('utf-8')
+    else:
+        output = None
+    print(output.strip())
+
+    # Ours
+
     async def run():
-        client = MayaClient(port=7001)
+        client = MayaClient(port=port)
         await client.connect()
         result = await client._send_receive(cmd)
         print(result)
 
     try:
         asyncio.run(run())
+    except KeyboardInterrupt:
+        pass
+
+    async def run2():
+        client = MayaClient(port=port)
+        await client.connect()
+        await client._bootstrap(overwrite=True)
+        result = await client.execute_code(cmd)
+        print(result)
+
+    try:
+        asyncio.run(run2())
     except KeyboardInterrupt:
         pass

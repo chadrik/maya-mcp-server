@@ -127,9 +127,9 @@ MIT
 
 ## TODO
 
-- [ ] Start a new command port for each client, so that multiple clients can connect.
-- [ ] list_sessions should have one session per maya instance, not per instance x port. we need to track configuration ports separately from communication ports.  For maya-command-ports, there's one commandport per active MCP client.  For qt-command-servers, there's one port for all acive MCP clients. 
-- [ ] Use `sys.displayhook`
+- [x] Start a new command port for each client, so that multiple clients can connect.
+- [ ] Provide an option to `execute` to run in global or private context.
+- [ ] list_sessions should have one session per maya instance, not per instance x port. we need to track configuration ports separately from communication ports.  For maya-command-ports, there's one commandport per active MCP client.  For qt-command-servers, there's one port for all acive MCP clients.
 - [ ] Raise exceptions instead of returning dict with error key
 - [ ] Make scene status into a resource
 - [ ] Replace TypedDict with dataclasses for tools and resources

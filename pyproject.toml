@@ -33,6 +33,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "types-maya-strict",
+    "PySide6",
 ]
 
 [project.scripts]

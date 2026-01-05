@@ -179,9 +179,7 @@ async def execute_code(
     Execute Python code in the active Maya session.
 
     Args:
-        code: Python code to execute. For result_type NONE, can be
-              multiple statements. For JSON or RAW, should be a single
-              expression whose value will be captured.
+        code: Python code to execute.
         result_type: How to handle the result:
             - "NONE": Execute statements, don't capture result
             - "JSON": Evaluate expression, JSON encode result
