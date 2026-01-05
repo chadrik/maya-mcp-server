@@ -8,14 +8,19 @@ import sys
 import traceback
 from typing import Any
 
+
 # Try importing Qt from PySide2 (Maya 2022-2023) or PySide6 (Maya 2024+)
 try:
-    from PySide2.QtNetwork import QTcpServer, QTcpSocket, QHostAddress  # type: ignore[import-not-found]
-    from PySide2.QtCore import QTimer, QIODevice  # type: ignore[import-not-found]
+    from PySide2.QtCore import QIODevice, QTimer  # type: ignore[import-not-found]
+    from PySide2.QtNetwork import (  # type: ignore[import-not-found]
+        QHostAddress,
+        QTcpServer,
+        QTcpSocket,
+    )
 except ImportError:
     try:
-        from PySide6.QtNetwork import QTcpServer, QTcpSocket, QHostAddress
-        from PySide6.QtCore import QTimer, QIODevice
+        from PySide6.QtCore import QIODevice, QTimer
+        from PySide6.QtNetwork import QHostAddress, QTcpServer, QTcpSocket
     except ImportError:
         # Qt not available - Qt server functions will fail gracefully
         QTcpServer = None
@@ -215,7 +220,8 @@ class QtCommandServer:
             raise RuntimeError("Qt not available - cannot create command server")
 
         self._server = QTcpServer()
-        self._clients: dict[int, dict[str, Any]] = {}  # client_id -> {socket, input_buffer, output_queue}
+        # client_id -> {socket, input_buffer, output_queue}
+        self._clients: dict[int, dict[str, Any]] = {}
         self._process_timer = QTimer()
         self._port = port
         self._running = False

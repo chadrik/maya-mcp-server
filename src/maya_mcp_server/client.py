@@ -7,25 +7,25 @@ import json
 import logging
 import random
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from typing_extensions import Self
-from dataclasses import dataclass
 
 from maya_mcp_server.bootstrap import (
     get_bootstrap_code,
     get_helper_module_code,
 )
 from maya_mcp_server.types import (
+    COMMUNICATION_PORT_MAX,
+    COMMUNICATION_PORT_MIN,
     CommandResponse,
-    ExecutionResult,
     OutputBuffer,
     PortType,
     ResultType,
     SessionInfo,
-    COMMUNICATION_PORT_MIN,
-    COMMUNICATION_PORT_MAX,
 )
+
 
 if TYPE_CHECKING:
     pass
@@ -211,6 +211,7 @@ class BaseMayaClient(ABC):
         info = response.result if response.result is not None else {}
 
         return SessionInfo(
+            session_key=self.key,
             host=self.host,
             port=self.port,
             pid=info.get("pid", 0),
@@ -468,15 +469,13 @@ class MayaClient(BaseMayaClient):
         # the helper module:
         helper_code = get_helper_module_code()
         # Remove the module name prefix since create_module doesn't exist yet
-        cmd = f"create_module({{name!r}}, {{code!r}}, {{overwrite!r}})"
+        cmd = "create_module({name!r}, {code!r}, {overwrite!r})"
         await self._send_receive(
             cmd, {"name": "maya_mcp", "code": helper_code, "overwrite": overwrite}
         )
         logger.info("Maya session bootstrapped")
 
-    async def bootstrap(
-        self, client_type: Literal["native", "qt"] = "native"
-    ) -> BaseMayaClient:
+    async def bootstrap(self, client_type: Literal["native", "qt"] = "native") -> BaseMayaClient:
         """
         Boostrap remote session and return a new client
         """

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, TypedDict
 
+
 # Port ranges
 # Communication ports: per-client dedicated ports created during bootstrap
 # These are filtered out when scanning for configuration ports
@@ -59,10 +60,11 @@ class ExecutionResult(TypedDict):
 class SessionInfo:
     """Information about a Maya session."""
 
-    host: str = ""
-    port: int = 0
-    pid: int = 0
-    user: str = ""
+    session_key: str
+    host: str
+    port: int
+    pid: int
+    user: str
     maya_version: str = ""
     scene_name: str = ""
     scene_path: str = ""

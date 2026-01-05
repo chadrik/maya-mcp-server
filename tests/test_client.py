@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from maya_mcp_server.client import (
     MayaClient,
-    MayaQtClient,
     MayaExecutionError,
+    MayaQtClient,
 )
 from maya_mcp_server.types import (
     CommandResponse,
@@ -96,9 +97,7 @@ class TestOutputBufferMethods:
         assert maya_client._stdout_buffer == "out"
         assert maya_client._stderr_buffer == "err"
 
-    def test_get_accumulated_output_clears_by_default(
-        self, maya_client: MayaClient
-    ) -> None:
+    def test_get_accumulated_output_clears_by_default(self, maya_client: MayaClient) -> None:
         """Test get_accumulated_output clears buffers by default."""
         maya_client._stdout_buffer = "stdout content"
         maya_client._stderr_buffer = "stderr content"
@@ -169,9 +168,7 @@ class TestSessionInfo:
         mock_send_receive.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_session_info_empty_response(
-        self, maya_client: MayaClient, mocker
-    ) -> None:
+    async def test_session_info_empty_response(self, maya_client: MayaClient, mocker) -> None:
         """Test session_info handles empty response."""
         mocker.patch.object(
             maya_client,
@@ -211,9 +208,7 @@ class TestGetBufferedOutput:
         assert output.stderr == "warning\n"
 
     @pytest.mark.asyncio
-    async def test_get_buffered_output_empty(
-        self, maya_client: MayaClient, mocker
-    ) -> None:
+    async def test_get_buffered_output_empty(self, maya_client: MayaClient, mocker) -> None:
         """Test get_buffered_output handles empty response."""
         mocker.patch.object(
             maya_client,
@@ -232,9 +227,7 @@ class TestStreamCapture:
     """Test stream capture methods."""
 
     @pytest.mark.asyncio
-    async def test_install_stream_capture(
-        self, maya_client: MayaClient, mocker
-    ) -> None:
+    async def test_install_stream_capture(self, maya_client: MayaClient, mocker) -> None:
         """Test install_stream_capture calls _send_receive."""
         mock_send_receive = mocker.patch.object(
             maya_client,
@@ -248,9 +241,7 @@ class TestStreamCapture:
         mock_send_receive.assert_called_once_with(maya_client.INSTALL_STREAM_CAPTURE)
 
     @pytest.mark.asyncio
-    async def test_uninstall_stream_capture(
-        self, maya_client: MayaClient, mocker
-    ) -> None:
+    async def test_uninstall_stream_capture(self, maya_client: MayaClient, mocker) -> None:
         """Test uninstall_stream_capture calls _send_receive."""
         mock_send_receive = mocker.patch.object(
             maya_client,
@@ -268,9 +259,7 @@ class TestExecuteCode:
     """Test execute_code method."""
 
     @pytest.mark.asyncio
-    async def test_execute_code_none_result_type(
-        self, maya_client: MayaClient, mocker
-    ) -> None:
+    async def test_execute_code_none_result_type(self, maya_client: MayaClient, mocker) -> None:
         """Test execute_code with NONE result type."""
         mock_send_receive = mocker.patch.object(
             maya_client,
@@ -279,9 +268,7 @@ class TestExecuteCode:
             return_value=CommandResponse(result=None, error=None),
         )
 
-        result = await maya_client.execute_code(
-            "print('hello')", result_type=ResultType.NONE
-        )
+        result = await maya_client.execute_code("print('hello')", result_type=ResultType.NONE)
 
         assert result.result is None
         assert result.error is None
@@ -292,9 +279,7 @@ class TestExecuteCode:
         )
 
     @pytest.mark.asyncio
-    async def test_execute_code_raw_result_type(
-        self, maya_client: MayaClient, mocker
-    ) -> None:
+    async def test_execute_code_raw_result_type(self, maya_client: MayaClient, mocker) -> None:
         """Test execute_code with RAW result type."""
         mocker.patch.object(
             maya_client,
@@ -323,9 +308,7 @@ class TestExecuteCode:
             ),
         )
 
-        result = await maya_client.execute_code(
-            "get_list()", result_type=ResultType.JSON
-        )
+        result = await maya_client.execute_code("get_list()", result_type=ResultType.JSON)
 
         assert result.result == ["item1", "item2"]
         assert result.error is None
@@ -347,9 +330,7 @@ class TestExecuteCode:
         assert result.result == "not valid json"
 
     @pytest.mark.asyncio
-    async def test_execute_code_with_error(
-        self, maya_client: MayaClient, mocker
-    ) -> None:
+    async def test_execute_code_with_error(self, maya_client: MayaClient, mocker) -> None:
         """Test execute_code returns error in response."""
         error_info = {
             "type": "builtins.NameError",
@@ -395,9 +376,7 @@ class TestMayaClientWriteModule:
         assert result == "Module 'mymodule' created"
 
     @pytest.mark.asyncio
-    async def test_write_module_default_message(
-        self, maya_client: MayaClient, mocker
-    ) -> None:
+    async def test_write_module_default_message(self, maya_client: MayaClient, mocker) -> None:
         """Test write_module returns default message on empty response."""
         mocker.patch.object(
             maya_client,

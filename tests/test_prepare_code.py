@@ -1,6 +1,5 @@
 """Tests for prepare_code_for_result_capture function."""
 
-import pytest
 
 from maya_mcp_server.maya_mcp_helper import prepare_code_for_result_capture
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from typing import Any
 
 from fastmcp import FastMCP
@@ -41,6 +40,7 @@ async def list_sessions() -> list[SessionInfo]:
     List all active Maya sessions.
 
     Returns a list of session information including:
+    - session_key: Session key used to interact with tools and resources
     - host: Session host address
     - port: Session port number
     - pid: Maya process ID
@@ -54,91 +54,14 @@ async def list_sessions() -> list[SessionInfo]:
 
 
 @mcp.tool
-async def use_session(host: str, port: int) -> SessionInfo:
-    """
-    Activate a Maya session for subsequent operations.
-
-    Args:
-        host: The session host (usually "127.0.0.1" for local)
-        port: The session port number
-
-    Returns:
-        Session information for the activated session
-
-    All subsequent write_module and execute_code calls will
-    target this session until a different one is selected.
-
-    This tool also sets up stream capture for stdout/stderr.
-    Subscribe to the MCP Resources for real-time output:
-    - maya://sessions/{host}:{port}/stdout
-    - maya://sessions/{host}:{port}/stderr
-    """
-    manager = get_session_manager()
-    client = await manager.use_session(host, port)
-
-    return await client.session_info()
-
-
-@mcp.tool
-async def unuse_session() -> str:
-    """
-    Deactivate the current Maya session and release all resources.
-
-    Returns:
-        Confirmation message
-
-    This tool:
-    - Unsubscribes from stdout/stderr resource streams
-    - Releases any held resources for the session
-    - Clears the active session, requiring use_session to be called
-      again before execute_code or write_module can be used
-    """
-    manager = get_session_manager()
-
-    if manager.active_session is None:
-        return "No active session to deactivate"
-
-    session_key = manager.active_session.key
-    await manager.unuse_session()
-
-    return f"Session {session_key} deactivated and resources released"
-
-
-@mcp.tool
-async def get_session_info() -> SessionInfo:
-    """
-    Get updated information about the currently active Maya session.
-
-    Returns:
-        SessionInfo with the same keys as list_sessions provides:
-        - host: Session host address
-        - port: Session port number
-        - pid: Maya process ID
-        - user: Logged-in user
-        - maya_version: Maya version string
-        - scene_name: Current scene filename
-        - scene_path: Full path to current scene
-
-    Raises:
-        RuntimeError: If no session is currently active
-    """
-    manager = get_session_manager()
-    client = manager.active_session
-
-    if client is None:
-        raise RuntimeError("No active session. Use use_session first.")
-
-    return await client.session_info()
-
-
-@mcp.tool
 async def write_module(
     name: str,
     code: str,
     overwrite: bool = False,
+    session_key: str | None = None,
 ) -> str:
     """
-    Create a virtual Python module in the active Maya session.
+    Create a virtual Python module in a Maya session.
 
     Args:
         name: Module name. Can be a dotted path (e.g., 'mypackage.utils')
@@ -146,6 +69,7 @@ async def write_module(
         code: Python source code for the module.
         overwrite: If True, replace existing module. If False, raise error
                    if module already exists.
+        session_key: Session key (optional if only one session exists)
 
     Returns:
         Success message
@@ -162,11 +86,7 @@ async def write_module(
         execute_code("import mytools; mytools.create_cube('myCube')")
     """
     manager = get_session_manager()
-    client = manager.active_session
-
-    if client is None:
-        raise RuntimeError("No active session. Use use_session first.")
-
+    client = await manager.get_client(session_key)
     return await client.write_module(name, code, overwrite)
 
 
@@ -174,9 +94,10 @@ async def write_module(
 async def execute_code(
     code: str,
     result_type: str = "NONE",
+    session_key: str | None = None,
 ) -> Any:
     """
-    Execute Python code in the active Maya session.
+    Execute Python code in a Maya session.
 
     Args:
         code: Python code to execute.
@@ -184,12 +105,13 @@ async def execute_code(
             - "NONE": Execute statements, don't capture result
             - "JSON": Evaluate expression, JSON encode result
             - "RAW": Evaluate expression, return string representation
+        session_key: Session key (optional if only one session exists)
 
     Returns:
         Captured result (None if result_type is NONE)
 
     Note: stdout and stderr are delivered in real-time via MCP Resource
-    subscriptions (maya://sessions/{host}:{port}/stdout and /stderr).
+    subscriptions (maya://sessions/{session_key}/stdout and /stderr).
     Call get_output() to retrieve buffered output.
 
     Example:
@@ -200,10 +122,7 @@ async def execute_code(
         execute_code("cmds.ls(type='mesh')", result_type="JSON")
     """
     manager = get_session_manager()
-    client = manager.active_session
-
-    if client is None:
-        raise RuntimeError("No active session. Use use_session first.")
+    client = await manager.get_client(session_key)
 
     rt = ResultType(result_type)
     result = await client.execute_code(code, rt)
@@ -216,32 +135,6 @@ async def execute_code(
         logger.debug(f"Failed to get buffered output: {e}")
 
     return result.result
-
-
-@mcp.tool
-async def get_output(clear: bool = True) -> OutputBuffer:
-    """
-    Get captured stdout/stderr output from the active session.
-
-    Args:
-        clear: If True (default), clear the buffer after reading.
-               If False, keep the buffer contents.
-
-    Returns:
-        OutputBuffer with stdout and stderr fields containing captured output
-        since the last call (or since session activation).
-
-    This provides access to stdout/stderr that was captured during
-    execute_code calls. For real-time streaming, subscribe to the
-    MCP Resources instead.
-    """
-    manager = get_session_manager()
-    client = manager.active_session
-
-    if client is None:
-        raise RuntimeError("No active session. Use use_session first.")
-
-    return client.get_accumulated_output(clear=clear)
 
 
 @mcp.tool
@@ -269,55 +162,54 @@ async def add_session(host: str = "127.0.0.1", port: int = 7001) -> SessionInfo:
     return await client.session_info()
 
 
-# MCP Resources for stdout/stderr streaming
+# MCP Resources
 
 
-@mcp.resource("maya://sessions/{host}:{port}/stdout")
-async def session_stdout(host: str, port: str) -> str:
+@mcp.resource("maya://sessions/{session_key}/info")
+async def session_info(session_key: str) -> SessionInfo:
     """
-    MCP Resource for stdout output from a Maya session.
+    Get information about a Maya session.
 
-    Returns buffered stdout content since last read.
-    """
-    manager = get_session_manager()
-    session_key = f"{host}:{port}"
+    Args:
+        session_key: Session key
 
-    # Get the client for this session
-    client = manager._sessions.get(session_key)
-    if client is None:
-        return ""
-
-    # Get stdout and clear it
-    output = client.get_accumulated_output(clear=True)
-
-    # Put stderr back since we only want stdout
-    client.append_output(stderr=output.stderr)
-
-    return output.stdout
-
-
-@mcp.resource("maya://sessions/{host}:{port}/stderr")
-async def session_stderr(host: str, port: str) -> str:
-    """
-    MCP Resource for stderr output from a Maya session.
-
-    Returns buffered stderr content since last read.
+    Returns:
+        SessionInfo with:
+        - session_key: Session key used to interact with tools and resources
+        - host: Session host address
+        - port: Session port number
+        - pid: Maya process ID
+        - user: Logged-in user
+        - maya_version: Maya version string
+        - scene_name: Current scene filename
+        - scene_path: Full path to current scene
     """
     manager = get_session_manager()
-    session_key = f"{host}:{port}"
+    client = await manager.get_client(session_key)
+    return await client.session_info()
 
-    # Get the client for this session
-    client = manager._sessions.get(session_key)
-    if client is None:
-        return ""
 
-    # Get stderr and clear it
-    output = client.get_accumulated_output(clear=True)
+@mcp.resource("maya://sessions/{session_key}/output")
+async def session_output(session_key: str, clear: bool = True) -> OutputBuffer:
+    """
+    Get captured stdout/stderr output from a Maya session.
 
-    # Put stdout back since we only want stderr
-    client.append_output(stdout=output.stdout)
+    Args:
+        clear: If True (default), clear the buffer after reading.
+               If False, keep the buffer contents.
+        session_key: Session key
 
-    return output.stderr
+    Returns:
+        OutputBuffer with stdout and stderr fields containing captured output
+        since the last call (or since stream capture was installed).
+
+    This provides access to stdout/stderr that was captured during
+    execute_code calls. For real-time streaming, subscribe to the
+    MCP Resources instead.
+    """
+    manager = get_session_manager()
+    client = await manager.get_client(session_key)
+    return client.get_accumulated_output(clear=clear)
 
 
 async def initialize_session_manager(

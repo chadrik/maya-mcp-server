@@ -7,11 +7,10 @@ import logging
 
 from maya_mcp_server.client import BaseMayaClient, MayaClient, MayaConnectionError
 from maya_mcp_server.types import (
-    ClientType,
-    PortType,
-    SessionInfo,
-    COMMUNICATION_PORT_MIN,
     COMMUNICATION_PORT_MAX,
+    COMMUNICATION_PORT_MIN,
+    ClientType,
+    SessionInfo,
 )
 from maya_mcp_server.utils import get_maya_listening_ports
 
@@ -36,9 +35,14 @@ class SessionManager:
         """
         self.scan_interval = scan_interval
         self.client_type = client_type
-        self._sessions: dict[str, BaseMayaClient] = {}  # key: "host:port" (communication port)
-        self._config_to_session: dict[str, str] = {}  # map config port -> session key
-        self._active_session: BaseMayaClient | None = None
+        # key: "host:port" (communication port)
+        self._sessions: dict[str, BaseMayaClient] = {}
+        # map config key -> session key
+        #   we use a "config" command port to bootstrap a dedicated communication port, and only
+        #   the latter are considered "sessions"
+        self._config_to_session: dict[str, str] = {}
+        # session keys with stream capture
+        self._stream_capture_installed: set[str] = set()
         self._scan_task: asyncio.Task[None] | None = None
         self._running = False
 
@@ -58,8 +62,7 @@ class SessionManager:
         await self._scan_for_sessions()
 
         # Start background scanning task
-        # FIXME: restore this
-        # self._scan_task = asyncio.create_task(self._background_scan())
+        self._scan_task = asyncio.create_task(self._background_scan())
 
     async def stop(self) -> None:
         """Stop scanning and disconnect all sessions."""
@@ -82,7 +85,7 @@ class SessionManager:
 
         self._sessions.clear()
         self._config_to_session.clear()
-        self._active_session = None
+        self._stream_capture_installed.clear()
         logger.info("Session manager stopped")
 
     async def _background_scan(self) -> None:
@@ -180,9 +183,8 @@ class SessionManager:
             if config_key:
                 del self._config_to_session[config_key]
 
-            # If this was the active session, clear it
-            if self._active_session is client:
-                self._active_session = None
+            # Remove from stream capture tracking
+            self._stream_capture_installed.discard(session_key)
 
             try:
                 await client.disconnect()
@@ -191,10 +193,10 @@ class SessionManager:
 
     async def list_sessions(self) -> list[SessionInfo]:
         """
-        List all active sessions with their info.
+        List all running Maya sessions.
 
         Returns:
-            List of SessionInfo dictionaries
+            List of key properties about each session
         """
         results: list[SessionInfo] = []
 
@@ -222,76 +224,50 @@ class SessionManager:
         key = self._session_key(host, port)
         return self._sessions.get(key)
 
-    async def use_session(self, host: str, port: int) -> BaseMayaClient:
+    async def get_client(self, session_key: str | None = None) -> BaseMayaClient:
         """
-        Activate a session for subsequent operations.
+        Get a client for the specified session, with auto-selection.
 
         Args:
-            host: Session host
-            port: Session port
+            session_key: Session key. If None and only one session exists, auto-selects it.
 
         Returns:
-            The activated MayaClient
+            The MayaClient for the session
 
         Raises:
-            ValueError: If session not found
+            ValueError: If no sessions exist, multiple sessions exist without
+                        explicit selection, or the specified session is not found.
 
-        Also installs stream capture for stdout/stderr, which can be
-        retrieved via get_buffered_output() for MCP Resource streaming.
+        Stream capture is automatically installed on first access to each session.
         """
-        key = self._session_key(host, port)
+        # Auto-select if only one session and no explicit host:port
+        client: BaseMayaClient
+        if session_key is None:
+            if len(self._sessions) == 0:
+                raise ValueError("No Maya sessions available. Use add_session first.")
+            elif len(self._sessions) == 1:
+                client = next(iter(self._sessions.values()))
+            else:
+                session_keys = list(self._sessions.keys())
+                raise ValueError(
+                    f"Multiple sessions available: {session_keys}. "
+                    "Specify host and port explicitly."
+                )
+        else:
+            maybe_client = self._sessions.get(session_key)
+            if maybe_client is None:
+                raise ValueError(f"Session {session_key} not found")
+            client = maybe_client
 
-        if key not in self._sessions:
-            # Try to connect directly
-            client = MayaClient(host, port)
+        # Auto-install stream capture on first access
+        if client.key not in self._stream_capture_installed:
             try:
-                await client.connect()
-                await client.bootstrap()
-                self._sessions[key] = client
+                await client.install_stream_capture()
+                self._stream_capture_installed.add(client.key)
             except Exception as e:
-                raise ValueError(f"Cannot connect to session {key}: {e}") from e
+                logger.warning(f"Failed to install stream capture for {client.key}: {e}")
 
-        # Deactivate previous session if any
-        if self._active_session is not None and self._active_session.key != key:
-            try:
-                await self._active_session.uninstall_stream_capture()
-            except Exception as e:
-                logger.debug(f"Error uninstalling stream capture: {e}")
-
-        self._active_session = self._sessions[key]
-
-        # Install stream capture for the new active session
-        try:
-            await self._active_session.install_stream_capture()
-        except Exception as e:
-            logger.warning(f"Failed to install stream capture: {e}")
-
-        logger.info(f"Activated session: {key}")
-        return self._active_session
-
-    async def unuse_session(self) -> None:
-        """
-        Deactivate the current session and release resources.
-
-        Uninstalls stream capture and clears the active session.
-        """
-        if self._active_session is None:
-            return
-
-        old_key = self._active_session.key
-
-        try:
-            await self._active_session.uninstall_stream_capture()
-        except Exception as e:
-            logger.debug(f"Error uninstalling stream capture: {e}")
-
-        self._active_session = None
-        logger.info(f"Deactivated session: {old_key}")
-
-    @property
-    def active_session(self) -> BaseMayaClient | None:
-        """Get the currently active session."""
-        return self._active_session
+        return client
 
     @property
     def session_count(self) -> int:

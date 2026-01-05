@@ -5,8 +5,8 @@ MCP server for interacting with Autodesk Maya sessions.
 ## Features
 
 - **Multi-session support**: Manage multiple Maya sessions from a single MCP server. The server scans for new Maya sessions that have been started and shutdown by the user.
-- **Full Python expressiveness**: Execute arbitrary Python code, not just predefined tools. Agents can create virtual python modules to expose functions for execution, including by the user.
-- **Streaming output**: Real-time log streaming for long-running operations.  Agents can subscribe to the output from the active Maya session, so that they're aware of updates made by their code or by the user.
+- **Full Python expressiveness**: Execute arbitrary Python code. Agents can create virtual python modules to expose functions for execution, including by the user.
+- **Streaming output**: Capture stdout/stderr from Maya sessions via MCP resources. Agents can monitor output from their code or user activity.
 - **Zero Maya-side setup**: Leverages Maya's default command port
 - **Easy installation**: Install and run via `uvx maya-mcp-server`
 
@@ -37,35 +37,6 @@ For local development use:
 claude mcp add --transport stdio maya -- uv run --directory /path/to/maya-mcp-server/ maya-mcp-server
 ```
 
-```json
-{
-  "mcpServers": {
-    "maya": {
-      "command": "uvx",
-      "args": ["maya-mcp-server"]
-    }
-  }
-}
-```
-
-```json
-      "mcpServers": {
-        "maya": {
-          "type": "stdio",
-          "command": "uv",
-          "args": [
-            "run",
-            "--directory",
-            "/Users/chad/dev/maya-mcp-server",
-            "maya-mcp-server"
-          ],
-          "env": {
-            "PYTHONUNBUFFERED": "1"
-          }
-        }
-      },
-```
-
 ### Maya Setup
 
 The server automatically discovers Maya sessions via command ports. To enable a Python command port in Maya:
@@ -79,10 +50,23 @@ Or add to your `userSetup.py` for automatic startup.
 
 ## Tools
 
-- `list_sessions`: List all active Maya sessions
-- `use_session`: Activate a session for subsequent operations
-- `write_module`: Create a virtual Python module in Maya
-- `execute_code`: Execute Python code in the active session
+Tools accept an optional `session_key` parameter for targeting specific sessions.
+If only one Maya session exists, it will be auto-selected.
+Session keys are returned by `list_sessions` and `add_session`.
+
+| Tool | Description |
+|------|-------------|
+| `list_sessions` | List all active Maya sessions. Returns session info including `session_key` for use with other tools/resources. |
+| `add_session` | Manually add a Maya session at a specific host:port. Use when auto-discovery doesn't find your session. |
+| `write_module` | Create a virtual Python module in Maya. Useful for defining reusable functions. |
+| `execute_code` | Execute Python code in a session. Supports result capture modes: `NONE`, `JSON`, `RAW`. |
+
+## Resources
+
+| Resource | Description |
+|----------|-------------|
+| `maya://sessions/{session_key}/info` | Session information (pid, user, maya_version, scene_name, scene_path) |
+| `maya://sessions/{session_key}/output` | Captured stdout/stderr output from the session |
 
 ## Similar tools
 
@@ -128,9 +112,13 @@ MIT
 ## TODO
 
 - [x] Start a new command port for each client, so that multiple clients can connect.
+- [x] Replace TypedDict with dataclasses for tools and resources
+- [x] Track configuration ports separately from communication ports
 - [ ] Provide an option to `execute` to run in global or private context.
-- [ ] list_sessions should have one session per maya instance, not per instance x port. we need to track configuration ports separately from communication ports.  For maya-command-ports, there's one commandport per active MCP client.  For qt-command-servers, there's one port for all acive MCP clients.
-- [ ] Raise exceptions instead of returning dict with error key
-- [ ] Make scene status into a resource
-- [ ] Replace TypedDict with dataclasses for tools and resources
+- [x] Make scene status into a resource
 - [ ] Yield output as it's printed?
+- [ ] Add tools to simplify interaction with UI: shelves, hotkeys, menus
+- [ ] Plugins to extend session info, e.g. with custom pipeline info
+- [ ] Investigate RPC for extensibility, implementation of custom tools
+- [x] Rewrite tests mocking only socket or send receive. 
+- [ ] Use a dispatch function for command port mode, to further harmonize. Create a shared type safe collection of tools that hold name and arguments. 
