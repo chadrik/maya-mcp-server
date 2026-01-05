@@ -48,6 +48,10 @@ async def list_sessions() -> list[SessionInfo]:
     - maya_version: Maya version string
     - scene_name: Current scene filename
     - scene_path: Full path to current scene
+
+    Note: To detect new or removed sessions, clients should call this tool
+    periodically (e.g., every 10-30 seconds) and compare results. The SessionManager
+    automatically scans for new Maya sessions in the background.
     """
     manager = get_session_manager()
     return await manager.list_sessions()

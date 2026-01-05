@@ -10,6 +10,8 @@ MCP server for interacting with Autodesk Maya sessions.
 - **Zero Maya-side setup**: Leverages Maya's default command port
 - **Easy installation**: Install and run via `uvx maya-mcp-server`
 
+![screen_recording_4x.gif](screen_recording_4x.gif)
+
 ## Installation
 
 ```bash
@@ -78,11 +80,12 @@ Disadvantages:
 * The MCP server is bound to a single Maya session running on the default port.
 * It is limited to a bespoke set of tools.  This could be seen as a security advantage, but it cripples the ability of an agent to do just about anything.
 * No support for reading stdout or stderr, so the agent is blind to what's happening in the Maya session.
+* Less robust approach to capturing command output (e.g. does not check if code is indented within a `for` loop or function)
 * Can't run via `uvx`, or `pip install` from pypi.
 
 ### [ChatGPT4Maya](https://github.com/thejoltjoker/ChatGPTforMaya)
 
-This is the OG LLM integration for Maya, which embeds ChatGPT directly in a PySide window and enables the LLM to respond to user commands and queries by executing code in the session.
+This is the original LLM integration for Maya, which embeds ChatGPT directly in a PySide window and enables the LLM to respond to user commands and queries by executing code in the session.
 
 Disadvantages:
 * Not an MCP server, so it cannot take full advantage of agentic workflows.
@@ -90,7 +93,7 @@ Disadvantages:
 
 ### [Jupyter MCP Server](https://jupyter-mcp-server.datalayer.tech/)
 
-This provided a solid reference for how to create an MCP server that works with multiple remote sessions (in this case, notebooks) to execute arbitrary code.
+This provided an interesting reference for how to create an MCP server in python that works with multiple remote sessions (in this case, notebooks) to execute arbitrary code.
 
 ## Development
 
@@ -111,14 +114,11 @@ MIT
 
 ## TODO
 
-- [x] Start a new command port for each client, so that multiple clients can connect.
-- [x] Replace TypedDict with dataclasses for tools and resources
-- [x] Track configuration ports separately from communication ports
 - [ ] Provide an option to `execute` to run in global or private context.
-- [x] Make scene status into a resource
 - [ ] Yield output as it's printed?
 - [ ] Add tools to simplify interaction with UI: shelves, hotkeys, menus
 - [ ] Plugins to extend session info, e.g. with custom pipeline info
 - [ ] Investigate RPC for extensibility, implementation of custom tools
-- [x] Rewrite tests mocking only socket or send receive. 
 - [ ] Use a dispatch function for command port mode, to further harmonize. Create a shared type safe collection of tools that hold name and arguments. 
+- [ ] Return stdout and stderr lines interleaved (and prefixed with `STDOUT:` `STDERR:`) so that the agent can determine order?
+- [ ] Cleanup command ports when complete.  This won't be necessary if we default to the Qt command server. 
