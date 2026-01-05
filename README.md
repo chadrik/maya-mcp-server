@@ -7,7 +7,7 @@ MCP server for interacting with Autodesk Maya sessions.
 - **Multi-session support**: Manage multiple Maya sessions from a single MCP server. The server scans for new Maya sessions that have been started and shutdown by the user.
 - **Full Python expressiveness**: Execute arbitrary Python code. Agents can create virtual python modules to expose functions for execution, including by the user.
 - **Streaming output**: Capture stdout/stderr from Maya sessions via MCP resources. Agents can monitor output from their code or user activity.
-- **Zero Maya-side setup**: Leverages Maya's default command port
+- **Simple Maya-side setup**: No modules to install in Maya: leverages Maya's command port to bootstrap itself.
 - **Easy installation**: Install and run via `uvx maya-mcp-server`
 
 ![screen_recording_4x.gif](screen_recording_4x.gif)
