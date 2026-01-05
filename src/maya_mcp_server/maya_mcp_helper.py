@@ -10,8 +10,8 @@ from typing import Any
 
 # Try importing Qt from PySide2 (Maya 2022-2023) or PySide6 (Maya 2024+)
 try:
-    from PySide2.QtNetwork import QTcpServer, QTcpSocket, QHostAddress
-    from PySide2.QtCore import QTimer, QIODevice
+    from PySide2.QtNetwork import QTcpServer, QTcpSocket, QHostAddress  # type: ignore[import-not-found]
+    from PySide2.QtCore import QTimer, QIODevice  # type: ignore[import-not-found]
 except ImportError:
     try:
         from PySide6.QtNetwork import QTcpServer, QTcpSocket, QHostAddress
@@ -215,7 +215,7 @@ class QtCommandServer:
             raise RuntimeError("Qt not available - cannot create command server")
 
         self._server = QTcpServer()
-        self._clients = {}  # client_id -> {socket, input_buffer, output_queue}
+        self._clients: dict[int, dict[str, Any]] = {}  # client_id -> {socket, input_buffer, output_queue}
         self._process_timer = QTimer()
         self._port = port
         self._running = False
@@ -225,7 +225,7 @@ class QtCommandServer:
         self._server.newConnection.connect(self._on_new_connection)
         self._process_timer.timeout.connect(self._process_messages)
 
-    def start(self):
+    def start(self) -> None:
         """Start listening on OS-assigned port."""
         # Listen on loopback with OS-assigned port (port 0)
         if not self._server.listen(QHostAddress.LocalHost, self._port):
@@ -238,7 +238,7 @@ class QtCommandServer:
         # Start message processing timer (check every 50ms)
         self._process_timer.start(50)
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the server and close connections."""
         self._running = False
         self._process_timer.stop()
@@ -252,11 +252,11 @@ class QtCommandServer:
         self._server.close()
 
     @property
-    def port(self):
+    def port(self) -> int:
         """Get the actual port the server is listening on."""
         return self._port
 
-    def _on_new_connection(self):
+    def _on_new_connection(self) -> None:
         """Handle new client connection."""
         socket = self._server.nextPendingConnection()
 
@@ -271,17 +271,17 @@ class QtCommandServer:
         socket.readyRead.connect(lambda cid=client_id: self._on_ready_read(cid))
         socket.disconnected.connect(lambda cid=client_id: self._on_disconnected(cid))
 
-    def _on_ready_read(self, client_id):
+    def _on_ready_read(self, client_id: int) -> None:
         """Read data from client (called by Qt signal)."""
         # Just mark that data is available; actual processing in timer
         pass
 
-    def _on_disconnected(self, client_id):
+    def _on_disconnected(self, client_id: int) -> None:
         """Handle client disconnect."""
         if client_id in self._clients:
             del self._clients[client_id]
 
-    def _process_messages(self):
+    def _process_messages(self) -> None:
         """Process incoming/outgoing messages (called by timer)."""
         # Cleanup stale clients (disconnected sockets)
         stale_clients = []
@@ -318,12 +318,13 @@ class QtCommandServer:
                 socket.write((message + "\n").encode("utf-8"))
                 socket.flush()
 
-    def _handle_message(self, client_id, line):
+    def _handle_message(self, client_id: int, line: str) -> None:
         """Handle a complete JSON message."""
         if client_id not in self._clients:
             return
 
         output_queue = self._clients[client_id]["output_queue"]
+        request: Any = None
 
         try:
             request = json.loads(line)
@@ -341,7 +342,7 @@ class QtCommandServer:
             }
             output_queue.append(json.dumps(error_response))
 
-    def _dispatch_request(self, request):
+    def _dispatch_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Dispatch request to appropriate handler."""
         method = request.get("method")
         params = request.get("params", {})
@@ -416,7 +417,7 @@ class QtCommandServer:
 _qt_server: QtCommandServer | None = None
 
 
-def start_qt_server(port: int):
+def start_qt_server(port: int) -> str:
     """Start the Qt command server and return the port number."""
     global _qt_server
 
@@ -439,7 +440,7 @@ def start_qt_server(port: int):
         )
 
 
-def stop_qt_server():
+def stop_qt_server() -> str:
     """Stop the Qt command server."""
     global _qt_server
     if _qt_server:
@@ -448,7 +449,7 @@ def stop_qt_server():
     return json.dumps({"success": True})
 
 
-def get_qt_server_port():
+def get_qt_server_port() -> str:
     """Get the port of the running Qt server."""
     if _qt_server is None:
         return json.dumps({"error": "Server not running"})

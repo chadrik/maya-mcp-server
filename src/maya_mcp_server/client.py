@@ -7,7 +7,9 @@ import json
 import logging
 import random
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar, Literal, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
+
+from typing_extensions import Self
 from dataclasses import dataclass
 
 from maya_mcp_server.bootstrap import (
@@ -59,7 +61,7 @@ class BaseMayaClient(ABC):
     timeout: float = 30.0
     buffer_size: int = 65536
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """
         Initialize a Maya client.
 
@@ -260,7 +262,7 @@ class BaseMayaClient(ABC):
 
     @abstractmethod
     async def _send_receive(
-        self, method: str, params: dict | None = None, raise_on_error: bool = True
+        self, method: str, params: dict[str, Any] | None = None, raise_on_error: bool = True
     ) -> CommandResponse:
         """
         Send command to Maya and receive response.
@@ -313,12 +315,12 @@ class MayaClient(BaseMayaClient):
     # Check if bootstrap has been done
     CHECK_BOOTSTRAP = "'maya_mcp' in __import__('sys').modules"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         self._port_type: PortType = PortType.UNKNOWN
 
     async def _send_receive(
-        self, method: str, params: dict | None = None, raise_on_error: bool = True
+        self, method: str, params: dict[str, Any] | None = None, raise_on_error: bool = True
     ) -> CommandResponse:
         """
         Send command to Maya commandPort and receive response.
@@ -474,7 +476,7 @@ class MayaClient(BaseMayaClient):
 
     async def bootstrap(
         self, client_type: Literal["native", "qt"] = "native"
-    ) -> BaseMayaClient | None:
+    ) -> BaseMayaClient:
         """
         Boostrap remote session and return a new client
         """
@@ -482,6 +484,7 @@ class MayaClient(BaseMayaClient):
 
         # Create a dedicated communication port for this client
         new_port = random.randint(COMMUNICATION_PORT_MIN, COMMUNICATION_PORT_MAX)
+        new_client: BaseMayaClient
 
         if client_type == "native":
             logger.info(f"Creating dedicated commandPort on port {new_port}")
@@ -532,6 +535,9 @@ class MayaClient(BaseMayaClient):
         # all bootstrap code and then connect to the Qt server it creates
 
         logger.info("Bootstrapping Maya session (sending code without waiting for responses)...")
+
+        if not self._writer:
+            raise MayaConnectionError("Not connected to Maya")
 
         # Phase 1: Execute bootstrap code to create create_module function
         bootstrap_code = get_bootstrap_code()
@@ -629,7 +635,9 @@ class MayaClient(BaseMayaClient):
         )
 
         result = response.result if response.result is not None else {}
-        return result.get("message", f"Module '{name}' created")
+        if isinstance(result, dict):
+            return str(result.get("message", f"Module '{name}' created"))
+        return f"Module '{name}' created"
 
     async def ping(self) -> bool:
         """
@@ -655,7 +663,7 @@ class MayaQtClient(BaseMayaClient):
     UNINSTALL_STREAM_CAPTURE = "uninstall_stream_capture"
     GET_BUFFERED_OUTPUT = "get_buffered_output"
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         self._request_counter: int = 0
 
@@ -708,10 +716,12 @@ class MayaQtClient(BaseMayaClient):
             self.CREATE_MODULE_TEMPLATE, {"name": name, "code": code, "overwrite": overwrite}
         )
         result = response.result if response.result is not None else {}
-        return result.get("message", f"Module '{name}' created")
+        if isinstance(result, dict):
+            return str(result.get("message", f"Module '{name}' created"))
+        return f"Module '{name}' created"
 
     async def _send_receive(
-        self, method: str, params: dict | None = None, raise_on_error: bool = True
+        self, method: str, params: dict[str, Any] | None = None, raise_on_error: bool = True
     ) -> CommandResponse:
         """Send JSON request to Qt server and receive response.
 
@@ -782,7 +792,7 @@ class MayaQtClient(BaseMayaClient):
         """
         try:
             response = await self._send_receive("ping")
-            return response.result == "pong"
+            return bool(response.result == "pong")
         except Exception:
             return False
 
@@ -809,15 +819,17 @@ maya.cmds.ls(cameras=True)
         result += data
     client.close()
 
+    output: str | None
     if result:
         output = result.decode("utf-8")
     else:
         output = None
-    print(output.strip())
+    if output:
+        print(output.strip())
 
     # Ours
 
-    async def run():
+    async def run() -> None:
         client = MayaClient(port=port)
         await client.connect()
         result = await client._send_receive(cmd)
@@ -828,7 +840,7 @@ maya.cmds.ls(cameras=True)
     except KeyboardInterrupt:
         pass
 
-    async def run2():
+    async def run2() -> None:
         client = MayaClient(port=port)
         await client.connect()
         await client._bootstrap(overwrite=True)

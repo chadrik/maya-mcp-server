@@ -2,9 +2,8 @@
 
 ## ⚠️ Critical Testing Rules
 
-1. **DO NOT run unit tests** - They cause pgrep errors and too many open files
-2. **Always test with open Maya session** - Use manual test scripts in project root
-3. **Module updates** - Always update `maya_mcp` module when reconnecting (module may be cached from previous sessions)
+1. **Prefer testing with open Maya session** - Use manual test scripts in project root
+2. **Module updates** - Always update `maya_mcp` module when reconnecting (module may be cached from previous sessions)
 
 ## 🏗️ Architecture Overview
 

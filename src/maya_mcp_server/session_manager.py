@@ -335,7 +335,7 @@ print('two')
 maya.cmds.ls(cameras=True)
 """
 
-    async def run():
+    async def run() -> None:
         session_manager = SessionManager()
         print("starting")
         await session_manager.start()
