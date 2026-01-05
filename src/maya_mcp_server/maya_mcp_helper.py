@@ -27,7 +27,9 @@ except ImportError:
 CAPTURE_VARIABLE = "_mcp_result"
 
 
-def prepare_code_for_result_capture(code: str, capture_variable: str = CAPTURE_VARIABLE) -> tuple[str, bool]:
+def prepare_code_for_result_capture(
+    code: str, capture_variable: str = CAPTURE_VARIABLE
+) -> tuple[str, bool]:
     """
     Transform Python code to capture the result of the final expression.
 
@@ -175,7 +177,8 @@ def execute(code: str, result_type: str = "NONE") -> str:
             raise RuntimeError(
                 "Results were requested but the code cannot be modified to capture a result."
                 "If you want to capture a result, make sure that the last line of code is in "
-                "the module scope (i.e. not in a function or loop")
+                "the module scope (i.e. not in a function or loop"
+            )
 
         exec(compile(modified_code, "<mcp>", "exec"), context)
         if was_modified:
@@ -207,14 +210,14 @@ class QtCommandServer:
     Supports multiple concurrent client connections.
     """
 
-    def __init__(self):
+    def __init__(self, port: int = 0):
         if QTcpServer is None:
             raise RuntimeError("Qt not available - cannot create command server")
 
         self._server = QTcpServer()
         self._clients = {}  # client_id -> {socket, input_buffer, output_queue}
         self._process_timer = QTimer()
-        self._port = 0
+        self._port = port
         self._running = False
         self._next_client_id = 0
 
@@ -225,9 +228,10 @@ class QtCommandServer:
     def start(self):
         """Start listening on OS-assigned port."""
         # Listen on loopback with OS-assigned port (port 0)
-        if not self._server.listen(QHostAddress.LocalHost, 0):
+        if not self._server.listen(QHostAddress.LocalHost, self._port):
             raise RuntimeError(f"Failed to start server: {self._server.errorString()}")
 
+        # if port was 0, it's OS-assigned, so reassign new value
         self._port = self._server.serverPort()
         self._running = True
 
@@ -409,10 +413,10 @@ class QtCommandServer:
 
 
 # Global Qt server instance
-_qt_server = None
+_qt_server: QtCommandServer | None = None
 
 
-def start_qt_server():
+def start_qt_server(port: int):
     """Start the Qt command server and return the port number."""
     global _qt_server
 
@@ -420,7 +424,7 @@ def start_qt_server():
         return json.dumps({"port": _qt_server.port, "already_running": True})
 
     try:
-        _qt_server = QtCommandServer()
+        _qt_server = QtCommandServer(port)
         _qt_server.start()
         return json.dumps({"port": _qt_server.port, "already_running": False})
     except Exception as e:

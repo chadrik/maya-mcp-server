@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from maya_mcp_server.client import MayaClient, MayaConnectionError
+from maya_mcp_server.client import BaseMayaClient, MayaClient, MayaConnectionError
 from maya_mcp_server.types import (
+    ClientType,
     PortType,
     SessionInfo,
     COMMUNICATION_PORT_MIN,
@@ -24,17 +25,20 @@ class SessionManager:
     def __init__(
         self,
         scan_interval: float = 10.0,
+        client_type: ClientType = ClientType.QT,
     ):
         """
         Initialize the session manager.
 
         Args:
             scan_interval: Seconds between background scans
+            client_type: Type of client to use for Maya communication
         """
         self.scan_interval = scan_interval
-        self._sessions: dict[str, MayaClient] = {}  # key: "host:port" (communication port)
+        self.client_type = client_type
+        self._sessions: dict[str, BaseMayaClient] = {}  # key: "host:port" (communication port)
         self._config_to_session: dict[str, str] = {}  # map config port -> session key
-        self._active_session: MayaClient | None = None
+        self._active_session: BaseMayaClient | None = None
         self._scan_task: asyncio.Task[None] | None = None
         self._running = False
 
@@ -48,7 +52,7 @@ class SessionManager:
             return
 
         self._running = True
-        logger.info("Starting session manager")
+        logger.info(f"Starting session manager (client_type={self.client_type.value})")
 
         # Do initial scan
         await self._scan_for_sessions()
@@ -123,7 +127,7 @@ class SessionManager:
                     f"Discovered Maya session at {client.key} (PID {port_info['process_id']})"
                 )
 
-    async def _probe_port(self, host: str, port: int) -> MayaClient | None:
+    async def _probe_port(self, host: str, port: int) -> BaseMayaClient | None:
         """
         Probe a port to check if it's a Maya command port.
 
@@ -139,7 +143,7 @@ class SessionManager:
 
         try:
             await client.connect()
-            new_client = await client.bootstrap()
+            new_client = await client.bootstrap(client_type=self.client_type.value)
             await client.disconnect()
             return new_client
         except MayaConnectionError:
@@ -204,7 +208,7 @@ class SessionManager:
 
         return results
 
-    async def get_session(self, host: str, port: int) -> MayaClient | None:
+    async def get_session(self, host: str, port: int) -> BaseMayaClient | None:
         """
         Get a session by host and port.
 
@@ -218,7 +222,7 @@ class SessionManager:
         key = self._session_key(host, port)
         return self._sessions.get(key)
 
-    async def use_session(self, host: str, port: int) -> MayaClient:
+    async def use_session(self, host: str, port: int) -> BaseMayaClient:
         """
         Activate a session for subsequent operations.
 
@@ -285,7 +289,7 @@ class SessionManager:
         logger.info(f"Deactivated session: {old_key}")
 
     @property
-    def active_session(self) -> MayaClient | None:
+    def active_session(self) -> BaseMayaClient | None:
         """Get the currently active session."""
         return self._active_session
 
@@ -294,7 +298,7 @@ class SessionManager:
         """Get the number of connected sessions."""
         return len(self._sessions)
 
-    async def add_session(self, host: str, port: int) -> MayaClient:
+    async def add_session(self, host: str, port: int) -> BaseMayaClient:
         """
         Manually add a session at a specific host:port.
 

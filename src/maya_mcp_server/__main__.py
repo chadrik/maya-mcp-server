@@ -36,6 +36,13 @@ def parse_args() -> argparse.Namespace:
         help="Increase logging verbosity (-v for INFO, -vv for DEBUG)",
     )
 
+    parser.add_argument(
+        "--client-type",
+        choices=["native", "qt"],
+        default="qt",
+        help="Client type: 'native' uses Maya's commandPort, 'qt' uses custom Qt server",
+    )
+
     return parser.parse_args()
 
 
@@ -60,6 +67,7 @@ async def run_server(args: argparse.Namespace) -> None:
     # Initialize session manager
     await initialize_session_manager(
         scan_interval=args.scan_interval,
+        client_type=args.client_type,
     )
 
     try:

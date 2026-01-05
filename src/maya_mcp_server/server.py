@@ -9,7 +9,7 @@ from typing import Any
 from fastmcp import FastMCP
 
 from maya_mcp_server.session_manager import SessionManager
-from maya_mcp_server.types import ResultType, SessionInfo
+from maya_mcp_server.types import ClientType, ResultType, SessionInfo
 
 
 logger = logging.getLogger(__name__)
@@ -322,12 +322,14 @@ async def session_stderr(host: str, port: str) -> str:
 
 async def initialize_session_manager(
     scan_interval: float = 10.0,
+    client_type: str = "qt",
 ) -> SessionManager:
     """
     Initialize the global session manager.
 
     Args:
         scan_interval: Seconds between background scans
+        client_type: Type of client to use ("native" or "qt")
 
     Returns:
         The initialized SessionManager
@@ -336,6 +338,7 @@ async def initialize_session_manager(
 
     _session_manager = SessionManager(
         scan_interval=scan_interval,
+        client_type=ClientType(client_type),
     )
     await _session_manager.start()
 

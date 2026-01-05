@@ -27,6 +27,13 @@ class PortType(str, Enum):
     UNKNOWN = "unknown"
 
 
+class ClientType(str, Enum):
+    """Type of client to use for Maya communication."""
+
+    NATIVE = "native"  # Maya's built-in commandPort
+    QT = "qt"  # Custom Qt-based TCP server
+
+
 class ErrorInfo(TypedDict):
     """Exception information from remote execution."""
 

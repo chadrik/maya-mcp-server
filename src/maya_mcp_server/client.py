@@ -7,7 +7,7 @@ import json
 import logging
 import random
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Literal, Self
 from dataclasses import dataclass
 
 from maya_mcp_server.bootstrap import (
@@ -23,7 +23,6 @@ from maya_mcp_server.types import (
     COMMUNICATION_PORT_MIN,
     COMMUNICATION_PORT_MAX,
 )
-
 
 if TYPE_CHECKING:
     pass
@@ -48,7 +47,7 @@ class BaseMayaClient(ABC):
     """Abstract base class for Maya clients."""
 
     GET_SESSION_INFO: ClassVar[str]
-    EXECUTE_TEMPLATE:  ClassVar[str]
+    EXECUTE_TEMPLATE: ClassVar[str]
     CREATE_MODULE_TEMPLATE: ClassVar[str]
     INSTALL_STREAM_CAPTURE: ClassVar[str]
     UNINSTALL_STREAM_CAPTURE: ClassVar[str]
@@ -297,7 +296,7 @@ class MayaClient(BaseMayaClient):
     START_COMMAND_PORT = f"{_MCP_HELPER}.start_command_port({{port!r}})"
 
     # Qt server command templates
-    START_QT_SERVER = f"{_MCP_HELPER}.start_qt_server()"
+    START_QT_SERVER = f"{_MCP_HELPER}.start_qt_server({{port!r}})"
     STOP_QT_SERVER = f"{_MCP_HELPER}.stop_qt_server()"
     GET_QT_SERVER_PORT = f"{_MCP_HELPER}.get_qt_server_port()"
 
@@ -433,7 +432,10 @@ class MayaClient(BaseMayaClient):
         if not overwrite:
             # Check if already bootstrapped (e.g., from previous connection)
             check_result = await self._send_receive(self.CHECK_BOOTSTRAP)
-            if str(check_result.result if check_result.result is not None else "").strip() == "True":
+            if (
+                str(check_result.result if check_result.result is not None else "").strip()
+                == "True"
+            ):
                 logger.info("Maya session already bootstrapped, updating module...")
                 # Module exists, but update it to ensure it has latest functions
                 helper_code = get_helper_module_code()
@@ -460,7 +462,9 @@ class MayaClient(BaseMayaClient):
         )
         logger.info("Maya session bootstrapped")
 
-    async def bootstrap(self) -> MayaClient | None:
+    async def bootstrap(
+        self, client_type: Literal["native", "qt"] = "native"
+    ) -> BaseMayaClient | None:
         """
         Boostrap remote session and return a new client
         """
@@ -468,17 +472,38 @@ class MayaClient(BaseMayaClient):
 
         # Create a dedicated communication port for this client
         new_port = random.randint(COMMUNICATION_PORT_MIN, COMMUNICATION_PORT_MAX)
-        logger.info(f"Creating dedicated commandPort on port {new_port}")
-        result = await self._send_receive(self.START_COMMAND_PORT, {"port": new_port})
-        logger.info(f"Dedicated commandPort created: {result}")
 
-        # Wait a moment for the port to start listening
-        await asyncio.sleep(0.5)
+        if client_type == "native":
+            logger.info(f"Creating dedicated commandPort on port {new_port}")
+            result = await self._send_receive(self.START_COMMAND_PORT, {"port": new_port})
+            logger.info(f"Dedicated commandPort created: {result}")
 
-        logger.info(f"Connecting to dedicated port {new_port}...")
-        new_client = MayaClient(
-            host=self.host, port=new_port, timeout=self.timeout, buffer_size=self.buffer_size
-        )
+            # Wait a moment for the port to start listening
+            await asyncio.sleep(0.5)
+
+            logger.info(f"Connecting to dedicated port {new_port}...")
+            new_client = MayaClient(
+                host=self.host, port=new_port, timeout=self.timeout, buffer_size=self.buffer_size
+            )
+        elif client_type == "qt":
+            # Unlike the commandPort, the qt server can handle multiple clients on the same port.
+            # Therefore, the port returned by _send_receive might be different than requested.
+            logger.info(f"Starting Qt server on port {new_port}")
+            result = await self._send_receive(self.START_QT_SERVER, {"port": new_port})
+            # Extract the actual port from the response (may differ if server was already running)
+            if result.result and isinstance(result.result, dict):
+                new_port = result.result.get("port", new_port)
+            logger.info(f"Qt server started on port {new_port}")
+
+            # Wait a moment for the port to start listening
+            await asyncio.sleep(0.5)
+
+            logger.info(f"Connecting to dedicated port {new_port}...")
+            new_client = MayaQtClient(
+                host=self.host, port=new_port, timeout=self.timeout, buffer_size=self.buffer_size
+            )
+        else:
+            raise TypeError(client_type)
         # Connect to the new dedicated port
         await new_client.connect()
         logger.info(f"Connected to dedicated port {new_port}")
@@ -766,7 +791,7 @@ maya.cmds.ls(cameras=True)
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(("127.0.0.1", port))
 
-    client.send(cmd.encode('utf-8'))
+    client.send(cmd.encode("utf-8"))
 
     result = data = client.recv(1024)
     while len(data) == 1024:
@@ -775,7 +800,7 @@ maya.cmds.ls(cameras=True)
     client.close()
 
     if result:
-        output = result.decode('utf-8')
+        output = result.decode("utf-8")
     else:
         output = None
     print(output.strip())
