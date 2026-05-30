@@ -276,6 +276,7 @@ class TestExecuteCode:
             maya_client.EXECUTE_TEMPLATE,
             {"code": "print('hello')", "result_type": "NONE"},
             raise_on_error=False,
+            timeout=None,
         )
 
     @pytest.mark.asyncio
@@ -348,6 +349,49 @@ class TestExecuteCode:
 
         assert result.result is None
         assert result.error == error_info
+
+    @pytest.mark.asyncio
+    async def test_execute_code_passes_timeout_override(
+        self, maya_client: MayaClient, mocker
+    ) -> None:
+        """Test execute_code forwards a per-call timeout override to _send_receive.
+
+        This is the primary path for long-running operations (e.g., Arnold
+        renders, large simulations) that need to exceed the client default.
+        """
+        mock_send_receive = mocker.patch.object(
+            maya_client,
+            "_send_receive",
+            new_callable=AsyncMock,
+            return_value=CommandResponse(result=None, error=None),
+        )
+
+        await maya_client.execute_code("long_render()", timeout=600.0)
+
+        mock_send_receive.assert_called_once_with(
+            maya_client.EXECUTE_TEMPLATE,
+            {"code": "long_render()", "result_type": "NONE"},
+            raise_on_error=False,
+            timeout=600.0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_execute_code_default_timeout_is_none(
+        self, maya_client: MayaClient, mocker
+    ) -> None:
+        """Test execute_code passes timeout=None when not specified, so the
+        client default (self.timeout) is used inside _send_receive."""
+        mock_send_receive = mocker.patch.object(
+            maya_client,
+            "_send_receive",
+            new_callable=AsyncMock,
+            return_value=CommandResponse(result=None, error=None),
+        )
+
+        await maya_client.execute_code("quick_query()")
+
+        _, kwargs = mock_send_receive.call_args
+        assert kwargs["timeout"] is None
 
 
 # ============================================================================
@@ -568,4 +612,5 @@ class TestMayaQtClientExecuteCode:
             qt_client.EXECUTE_TEMPLATE,
             {"code": "get_dict()", "result_type": "JSON"},
             raise_on_error=False,
+            timeout=None,
         )

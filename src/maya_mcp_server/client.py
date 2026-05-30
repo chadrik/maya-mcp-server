@@ -225,6 +225,7 @@ class BaseMayaClient(ABC):
         self,
         code: str,
         result_type: ResultType = ResultType.NONE,
+        timeout: float | None = None,
     ) -> CommandResponse:
         """
         Execute Python code in Maya and return the result.
@@ -246,6 +247,7 @@ class BaseMayaClient(ABC):
             self.EXECUTE_TEMPLATE,
             {"code": code, "result_type": result_type.value},
             raise_on_error=False,
+            timeout=timeout,
         )
 
         # Decode JSON result if needed (same as commandPort path)
@@ -263,7 +265,8 @@ class BaseMayaClient(ABC):
 
     @abstractmethod
     async def _send_receive(
-        self, method: str, params: dict[str, Any] | None = None, raise_on_error: bool = True
+        self, method: str, params: dict[str, Any] | None = None, raise_on_error: bool = True,
+        timeout: float | None = None,
     ) -> CommandResponse:
         """
         Send command to Maya and receive response.
@@ -321,7 +324,8 @@ class MayaClient(BaseMayaClient):
         self._port_type: PortType = PortType.UNKNOWN
 
     async def _send_receive(
-        self, method: str, params: dict[str, Any] | None = None, raise_on_error: bool = True
+        self, method: str, params: dict[str, Any] | None = None, raise_on_error: bool = True,
+        timeout: float | None = None,
     ) -> CommandResponse:
         """
         Send command to Maya commandPort and receive response.
@@ -354,11 +358,12 @@ class MayaClient(BaseMayaClient):
                 await self._writer.drain()
 
                 # Read response until null terminator
+                effective_timeout = timeout if timeout is not None else self.timeout
                 response_bytes = b""
                 while True:
                     chunk = await asyncio.wait_for(
                         self._reader.read(self.buffer_size),
-                        timeout=self.timeout,
+                        timeout=effective_timeout,
                     )
                     if not chunk:
                         break
@@ -720,7 +725,8 @@ class MayaQtClient(BaseMayaClient):
         return f"Module '{name}' created"
 
     async def _send_receive(
-        self, method: str, params: dict[str, Any] | None = None, raise_on_error: bool = True
+        self, method: str, params: dict[str, Any] | None = None, raise_on_error: bool = True,
+        timeout: float | None = None,
     ) -> CommandResponse:
         """Send JSON request to Qt server and receive response.
 
@@ -749,9 +755,10 @@ class MayaQtClient(BaseMayaClient):
                 self._writer.write(request_line.encode("utf-8"))
                 await self._writer.drain()
 
+                effective_timeout = timeout if timeout is not None else self.timeout
                 # Read response (line-delimited JSON)
                 response_line = await asyncio.wait_for(
-                    self._reader.readline(), timeout=self.timeout
+                    self._reader.readline(), timeout=effective_timeout
                 )
 
                 if not response_line:

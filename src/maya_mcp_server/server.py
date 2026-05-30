@@ -99,6 +99,7 @@ async def execute_code(
     code: str,
     result_type: str = "NONE",
     session_key: str | None = None,
+    timeout: float | None = None,
 ) -> Any:
     """
     Execute Python code in a Maya session.
@@ -110,6 +111,11 @@ async def execute_code(
             - "JSON": Evaluate expression, JSON encode result
             - "RAW": Evaluate expression, return string representation
         session_key: Session key (optional if only one session exists)
+        timeout: Per-call timeout in seconds. If None (default), uses the
+            client default timeout (60s, set in SessionManager). For long-
+            running operations like Arnold renders or simulations, pass a
+            higher value (e.g., 300.0 or 600.0). Note: the MCP client may
+            also impose its own per-request timeout that takes precedence.
 
     Returns:
         Captured result (None if result_type is NONE)
@@ -129,7 +135,7 @@ async def execute_code(
     client = await manager.get_client(session_key)
 
     rt = ResultType(result_type)
-    result = await client.execute_code(code, rt)
+    result = await client.execute_code(code, rt, timeout=timeout)
 
     # Fetch any buffered output and store it in the client
     try:
