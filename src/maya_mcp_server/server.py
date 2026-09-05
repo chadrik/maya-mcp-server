@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 
 from maya_mcp_server.session_manager import SessionManager
 from maya_mcp_server.types import ClientType, OutputBuffer, ResultType, SessionInfo
@@ -114,9 +115,12 @@ async def execute_code(
     Returns:
         Captured result (None if result_type is NONE)
 
-    Note: stdout and stderr are delivered in real-time via MCP Resource
-    subscriptions (maya://sessions/{session_key}/stdout and /stderr).
-    Call get_output() to retrieve buffered output.
+    Raises:
+        ToolError: If the code raised an exception inside Maya. The message
+            carries the exception type, message, and remote traceback.
+
+    Note: stdout and stderr are delivered via the MCP Resource
+    maya://sessions/{session_key}/output.
 
     Example:
         # Execute statements
@@ -137,6 +141,13 @@ async def execute_code(
         client.append_output(output.stdout, output.stderr)
     except Exception as e:
         logger.debug(f"Failed to get buffered output: {e}")
+
+    # Surface remote exceptions to the caller. Without this the tool reports
+    # success for code that raised, and an agent has no signal to correct.
+    if result.error:
+        raise ToolError(
+            f"{result.error['type']}: {result.error['message']}\n\n{result.error['traceback']}"
+        )
 
     return result.result
 
